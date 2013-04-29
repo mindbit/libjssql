@@ -4,13 +4,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "js_sql.h"
+#include "js_mysql.h"
 
 /* The class of the global object. */
 static JSClass global_class = {
 	"global", JSCLASS_GLOBAL_FLAGS,
 	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
+	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
 	JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
@@ -42,7 +42,7 @@ int main(int argc, const char *argv[])
 	cx = JS_NewContext(rt, 8192);
 	if (cx == NULL)
 		return 1;
-	JS_SetOptions(cx, JSOPTION_VAROBJFIX | JSOPTION_JIT | JSOPTION_METHODJIT);
+	JS_SetOptions(cx, JSOPTION_VAROBJFIX | JSOPTION_METHODJIT);
 	JS_SetVersion(cx, JSVERSION_LATEST);
 	JS_SetErrorReporter(cx, reportError);
 
@@ -50,7 +50,10 @@ int main(int argc, const char *argv[])
 	 * Create the global object in a new compartment.
 	 * You always need a global object per context.
 	 */
-	global = JS_NewCompartmentAndGlobalObject(cx, &global_class, NULL);
+	//JS_BeginRequest(cx); // needed by js-17.0.0 DEBUG
+	//global = JS_NewGlobalObject(cx, &global_class, NULL); // works with js-17.0.0
+	//global = JS_NewGlobalObject(cx, &global_class); // compiles with js-1.8.5, but segfaults
+	global = JS_NewCompartmentAndGlobalObject(cx, &global_class, NULL); // works with js-1.8.5
 	if (global == NULL)
 		return 1;
 
@@ -63,6 +66,8 @@ int main(int argc, const char *argv[])
 
 	if (!JS_SqlInit(cx, global))
 		return 1;
+
+	JS_MysqlConstructAndRegister(cx, global);
 
 	int fd;
 	void *buf;
@@ -81,9 +86,10 @@ int main(int argc, const char *argv[])
 	 * Errors are conventionally saved in a JSBool variable named ok.
 	 */
 	jsval rval;
-	uintN lineno = 0;
+	uint lineno = 0;
 
 	JS_EvaluateScript(cx, global, buf, len, "noname", lineno, &rval);
+	//JS_EndRequest(cx); // needed by js-17.0.0 DEBUG
 	munmap(buf, len);
 	/* End of your application code */
 

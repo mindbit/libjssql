@@ -3,6 +3,7 @@
 
 #include <jsapi.h>
 
-int JS_SqlInit(JSContext *cx, JSObject *global);
+JSBool JS_SqlInit(JSContext *cx, JSObject *global);
+JSBool JS_SqlRegisterDriver(JSContext *cx, JSObject *global, JSObject *driver);
 
 #endif
