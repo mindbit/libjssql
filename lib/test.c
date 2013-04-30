@@ -17,10 +17,9 @@ static JSClass global_class = {
 /* The error reporter callback. */
 void reportError(JSContext *cx, const char *message, JSErrorReport *report)
 {
-	fprintf(stderr, "%s:%u:%s\n",
-			report->filename ? report->filename : "<no filename=\"filename\">",
-			(unsigned int) report->lineno,
-			message);
+	fprintf(stderr, "ERROR [%s:%u] %s\n",
+			report->filename ? report->filename : "<no filename>",
+			(unsigned int) report->lineno, message);
 }
 
 int main(int argc, const char *argv[])
@@ -50,10 +49,10 @@ int main(int argc, const char *argv[])
 	 * Create the global object in a new compartment.
 	 * You always need a global object per context.
 	 */
-	//JS_BeginRequest(cx); // needed by js-17.0.0 DEBUG
-	//global = JS_NewGlobalObject(cx, &global_class, NULL); // works with js-17.0.0
+	JS_BeginRequest(cx); // needed by js-17.0.0 DEBUG
+	global = JS_NewGlobalObject(cx, &global_class, NULL); // works with js-17.0.0
 	//global = JS_NewGlobalObject(cx, &global_class); // compiles with js-1.8.5, but segfaults
-	global = JS_NewCompartmentAndGlobalObject(cx, &global_class, NULL); // works with js-1.8.5
+	//global = JS_NewCompartmentAndGlobalObject(cx, &global_class, NULL); // works with js-1.8.5
 	if (global == NULL)
 		return 1;
 
@@ -89,7 +88,7 @@ int main(int argc, const char *argv[])
 	uint lineno = 0;
 
 	JS_EvaluateScript(cx, global, buf, len, "noname", lineno, &rval);
-	//JS_EndRequest(cx); // needed by js-17.0.0 DEBUG
+	JS_EndRequest(cx); // needed by js-17.0.0 DEBUG
 	munmap(buf, len);
 	/* End of your application code */
 

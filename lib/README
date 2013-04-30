@@ -33,3 +33,19 @@ jsapi.h, line 3491
 #define JS_ARGV(cx,vp)          ((vp) + 2)
 #define JS_RVAL(cx,vp)          (*(vp))
 #define JS_SET_RVAL(cx,vp,v)    (*(vp) = (v))
+
+
+
+======================= inspect object properties =======================
+
+#if 0
+	JSIdArray *props = JS_Enumerate(cx, JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[1]));
+	printf("len: %d\n", props->length);
+	if (JSID_IS_STRING(props->vector[0])) {
+		JSString *jsstr = JSID_TO_STRING(props->vector[0]);
+		char *str = JS_EncodeString(cx, jsstr);
+		printf("string: '%s'\n", str);
+		JS_free(cx, str);
+	}
+	JS_DestroyIdArray(cx, props);
+#endif

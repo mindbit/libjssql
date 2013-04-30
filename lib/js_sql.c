@@ -1,10 +1,7 @@
 #include "js_sql.h"
 
-static JSBool DriverManager_getConnection(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool DriverManager_getDriver(JSContext *cx, unsigned argc, jsval *vp)
 {
-	/* Equivalent of "return null;" from JavaScript */
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-
 	jsval drivers;
 	JS_LookupProperty(cx, JS_THIS_OBJECT(cx, vp), "drivers", &drivers);
 	// FIXME check return code; check that drivers is an array
@@ -19,16 +16,77 @@ static JSBool DriverManager_getConnection(JSContext *cx, unsigned argc, jsval *v
 
 		JS_GetElement(cx, obj, i, &driver);
 		JS_CallFunctionName(cx, JSVAL_TO_OBJECT(driver), "acceptsURL", 1, &acceptsURL_argv[0], &rval); // FIXME check return value
-		printf("check driver %d!\n", i);
+
+		JSBool acceptsURL;
+		JS_ValueToBoolean(cx, rval, &acceptsURL); // FIXME check ret val
+		if (acceptsURL) {
+			JS_SET_RVAL(cx, vp, driver);
+			return JS_TRUE;
+		}
 	}
 
-	return JS_TRUE;
+	JS_ReportError(cx, "No suitable driver");
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_FALSE;
+}
+
+static JSBool DriverManager_getConnection(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval drivers;
+	JS_LookupProperty(cx, JS_THIS_OBJECT(cx, vp), "drivers", &drivers);
+	// FIXME check return code; check that drivers is an array
+	JSObject *obj = JSVAL_TO_OBJECT(drivers);
+
+	jsuint len, i;
+	JS_GetArrayLength(cx, obj, &len);
+
+
+	jsval connect_argv[2] = {JS_ARGV(cx, vp)[0]};
+	if (argc == 2) {
+		/* Caller passed "info" object, so we forward it as-is */
+		connect_argv[1] = JS_ARGV(cx, vp)[1];
+	} else {
+		JSObject *info = JS_NewObject(cx, NULL, NULL, NULL); // FIXME root it to avoid GC
+		if (argc > 1)
+			JS_DefineProperty(cx, info, "user", JS_ARGV(cx, vp)[1], NULL, NULL, JSPROP_ENUMERATE);
+		if (argc > 2)
+			JS_DefineProperty(cx, info, "password", JS_ARGV(cx, vp)[2], NULL, NULL, JSPROP_ENUMERATE);
+
+		connect_argv[1] = OBJECT_TO_JSVAL(info);
+	};
+
+	jsval reason = JSVAL_NULL;
+	for (i = 0; i < len; i++) {
+		jsval driver, rval;
+		JS_GetElement(cx, obj, i, &driver);
+
+		if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(driver), "connect", 2, &connect_argv[0], &rval)) {
+			if (JSVAL_IS_NULL(reason))
+				JS_GetPendingException(cx, &reason);
+			continue;
+		}
+		if (JSVAL_IS_NULL(rval))
+			continue;
+		JS_SET_RVAL(cx, vp, rval);
+		return JS_TRUE;
+	}
+
+	if (JSVAL_IS_NULL(reason)) {
+		JSString *url_str = JS_ValueToString(cx, JS_ARGV(cx, vp)[0]);
+		// FIXME check return value
+		// FIXME root url_str (protect from GC) -> https://developer.mozilla.org/en-US/docs/SpiderMonkey/JSAPI_Reference/JS_ValueToString
+		char *url = JS_EncodeString(cx, url_str);
+		JS_ReportError(cx, "No suitable driver found for %s", url);
+		JS_free(cx, url);
+	} else
+		JS_SetPendingException(cx, reason);
+
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_FALSE;
 }
 
 static JSBool DriverManager_registerDriver(JSContext *cx, unsigned argc, jsval *vp)
 {
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-
 	jsval drivers;
 	JS_LookupProperty(cx, JS_THIS_OBJECT(cx, vp), "drivers", &drivers);
 	// FIXME check return code; check that drivers is an array
@@ -36,11 +94,9 @@ static JSBool DriverManager_registerDriver(JSContext *cx, unsigned argc, jsval *
 
 	jsuint len;
 	JS_GetArrayLength(cx, obj, &len);
-
 	JS_SetElement(cx, obj, len, JS_ARGV(cx, vp));
 
-	JS_GetArrayLength(cx, obj, &len);
-	printf("Called my function register %d !\n", len);
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
 	return JS_TRUE;
 }
 
@@ -52,6 +108,7 @@ static JSClass DriverManager_class = {
 
 static JSFunctionSpec DriverManager_functions[] = {
 	JS_FS("getConnection", DriverManager_getConnection, 3, 0),
+	JS_FS("getDriver", DriverManager_getDriver, 1, 0),
 	JS_FS("registerDriver", DriverManager_registerDriver, 1, 0),
 	JS_FS_END
 };

@@ -1,11 +1,11 @@
 .PHONY: all clean
 
-#JSDIR=/opt/js-17.0.0-debug
-#CFLAGS = -I$(JSDIR)/include/js -Wall -g -O0 -DDEBUG
-#LDFLAGS = -L$(JSDIR)/lib -Wl,-rpath,$(JSDIR)/lib -lmozjs-17.0
+JSDIR=/opt/js-17.0.0-debug
+CFLAGS = -I$(JSDIR)/include/js -Wall -g -O0 -DDEBUG -Djsuint=unsigned
+LDFLAGS = -L$(JSDIR)/lib -Wl,-rpath,$(JSDIR)/lib -L/usr/lib64/mysql -lmozjs-17.0 -lmysqlclient
 
-CFLAGS = -I/usr/include/js -Wall -g -O0
-LDFLAGS = -ljs
+#CFLAGS = -I/usr/include/js -Wall -g -O0
+#LDFLAGS = -ljs
 
 all: test
 
