@@ -69,12 +69,12 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 		JSObject *info = JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[1]);
 		jsval user_jsv, passwd_jsv;
 
-		if (JS_GetProperty(cx, info, "user", &user_jsv)) {
+		if (JS_GetProperty(cx, info, "user", &user_jsv) && !JSVAL_IS_NULL(user_jsv)) {
 			JSString *user_str = JS_ValueToString(cx, user_jsv);
 			user = JS_EncodeString(cx, user_str);
 		}
 
-		if (JS_GetProperty(cx, info, "password", &user_jsv)) {
+		if (JS_GetProperty(cx, info, "password", &passwd_jsv) && !JSVAL_IS_NULL(passwd_jsv)) {
 			JSString *passwd_str = JS_ValueToString(cx, passwd_jsv);
 			passwd = JS_EncodeString(cx, passwd_str);
 		}
@@ -97,7 +97,7 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 
 	/* Connection is successful. Create a new connection object and
 	 * link the mysql object to it. */
-	JSObject *robj =  JS_NewObject(cx, NULL, NULL, NULL);
+	JSObject *robj =  JS_NewObject(cx, &MysqlConnection_class, NULL, NULL);
 	JS_SetPrivate(robj, mysql);
 	rval = OBJECT_TO_JSVAL(robj);
 
