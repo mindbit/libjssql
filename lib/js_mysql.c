@@ -1,11 +1,330 @@
 #include <mysql/mysql.h>
+#include <assert.h>
 #include "js_mysql.h"
+
+struct prepared_statement {
+	MYSQL_STMT *stmt;
+
+	// parameters
+	MYSQL_BIND *p_bind;
+	unsigned int p_len;
+
+	// results
+	MYSQL_BIND *r_bind;
+	unsigned int r_len;
+	unsigned long *r_bind_len;
+};
+
+/* {{{ MysqlStatement */
+
+static JSBool MysqlStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return JS_FALSE;
+}
+
+static JSBool MysqlStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return JS_FALSE;
+}
+
+static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return JS_FALSE;
+}
+
+static JSBool MysqlStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval rval = JSVAL_NULL;
+	JSBool ret = JS_FALSE;
+	if (JS_LookupProperty(cx, JS_THIS_OBJECT(cx, vp), "connection", &rval))
+		ret = JS_TRUE;
+
+	JS_SET_RVAL(cx, vp, rval);
+	return ret;
+}
+
+static JSFunctionSpec MysqlStatement_functions[] = {
+	JS_FS("execute", MysqlStatement_execute, 1, 0),
+	JS_FS("executeQuery", MysqlStatement_executeQuery, 1, 0),
+	JS_FS("executeUpdate", MysqlStatement_executeUpdate, 1, 0),
+	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
+	JS_FS_END
+};
+
+/* }}} MysqlStatement */
+
+/* {{{ MysqlPreparedResultSet */
+
+static JSClass MysqlPreparedResultSet_class = {
+	"MysqlPreparedResultSet", JSCLASS_HAS_PRIVATE,
+	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
+};
+
+static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
+{
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_TRUE;
+}
+
+static JSBool MysqlPreparedResultSet_next(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	switch (mysql_stmt_fetch(pstmt->stmt)) {
+	case 0:
+	case MYSQL_DATA_TRUNCATED:
+		JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(JS_TRUE));
+		return JS_TRUE;
+	case MYSQL_NO_DATA:
+		JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(JS_FALSE));
+		return JS_TRUE;
+	default:
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+	}
+
+	return JS_FALSE;
+}
+
+static JSFunctionSpec MysqlPreparedResultSet_functions[] = {
+	JS_FS("getNumber", MysqlPreparedResultSet_getNumber, 1, 0),
+	JS_FS("next", MysqlPreparedResultSet_next, 0, 0),
+	JS_FS_END
+};
+
+/* }}} MysqlPreparedResultSet */
+
+/* {{{ MysqlPreparedStatement */
+
+static JSClass MysqlPreparedStatement_class = {
+	"MysqlConnection", JSCLASS_HAS_PRIVATE,
+	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
+};
+
+static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statement *pstmt)
+{
+	if (pstmt->p_len && mysql_stmt_bind_param(pstmt->stmt, pstmt->p_bind)) {
+		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		return JS_FALSE;
+	}
+
+	if (mysql_stmt_execute(pstmt->stmt)) {
+		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		return JS_FALSE;
+	}
+
+	if (pstmt->r_len && mysql_stmt_bind_result(pstmt->stmt, pstmt->r_bind)) {
+		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		return JS_FALSE;
+	}
+
+	return JS_TRUE;
+}
+
+static JSBool prepared_statement_get_result_set(JSContext *cx, struct prepared_statement *pstmt, jsval *rval)
+{
+	JSObject *robj = JS_NewObject(cx, &MysqlPreparedResultSet_class, NULL, NULL);
+	JS_SetPrivate(robj, pstmt);
+	JS_DefineFunctions(cx, robj, MysqlPreparedResultSet_functions);
+
+	*rval = OBJECT_TO_JSVAL(robj);
+	return JS_TRUE;
+}
+
+static JSBool MysqlPreparedStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (!prepared_statement_execute(cx, pstmt))
+		return JS_FALSE;
+
+	JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(pstmt->r_len > 0));
+	return JS_TRUE;
+}
+
+static JSBool MysqlPreparedStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (!prepared_statement_execute(cx, pstmt))
+		return JS_FALSE;
+
+	prepared_statement_get_result_set(cx, pstmt, &JS_RVAL(cx, vp));
+	return JS_TRUE;
+}
+
+static JSBool MysqlPreparedStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (!prepared_statement_execute(cx, pstmt))
+		return JS_FALSE;
+
+	my_ulonglong rows = mysql_stmt_affected_rows(pstmt->stmt);
+	JS_SET_RVAL(cx, vp, JS_NumberValue(rows));
+	return JS_TRUE;
+}
+
+static JSBool MysqlPreparedStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (!pstmt->r_len) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		return JS_TRUE;
+	}
+
+	prepared_statement_get_result_set(cx, pstmt, &JS_RVAL(cx, vp));
+	return JS_TRUE;
+}
+
+static JSBool MysqlPreparedStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (pstmt->r_len) {
+		my_ulonglong rows = mysql_stmt_affected_rows(pstmt->stmt);
+		JS_SET_RVAL(cx, vp, JS_NumberValue(rows));
+	} else
+		JS_SET_RVAL(cx, vp, JS_NumberValue(-1));
+
+	return JS_TRUE;
+}
+
+static JSFunctionSpec MysqlPreparedStatement_functions[] = {
+	JS_FS("execute", MysqlPreparedStatement_execute, 0, 0),
+	JS_FS("executeQuery", MysqlPreparedStatement_executeQuery, 0, 0),
+	JS_FS("executeUpdate", MysqlPreparedStatement_executeUpdate, 0, 0),
+	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
+	JS_FS("getResultSet", MysqlPreparedStatement_getResultSet, 0, 0),
+	JS_FS("getUpdateCount", MysqlPreparedStatement_getUpdateCount, 0, 0),
+	JS_FS_END
+};
+
+/* }}} MysqlPreparedStatement */
+
+/* {{{ MysqlConnection */
 
 static JSClass MysqlConnection_class = {
 	"MysqlConnection", JSCLASS_HAS_PRIVATE,
 	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
 	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
 };
+
+static JSBool MysqlConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
+{
+	JSObject *obj = JS_NewObject(cx, NULL, NULL, NULL);
+
+	JS_DefineProperty(cx, obj, "connection", JS_THIS(cx, vp), NULL, NULL, JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
+	JS_DefineFunctions(cx, obj, MysqlStatement_functions); // FIXME check return value
+
+	JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(obj));
+	return JS_TRUE;
+}
+
+static JSBool MysqlConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
+{
+	if (argc < 1) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		return JS_FALSE;
+	}
+
+	JSString *str = JS_ValueToString(cx, JS_ARGV(cx, vp)[0]);
+	if (str) {
+		JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(str));
+		return JS_TRUE;
+	}
+
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_FALSE;
+}
+
+static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	jsval nativeSQL_argv[] = {JS_ARGV(cx, vp)[0]};
+	jsval nativeSQL_jsv;
+
+	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(this), "nativeSQL", 1, nativeSQL_argv, &nativeSQL_jsv))
+		return JS_FALSE;
+
+	JSString *nativeSQL_str = JS_ValueToString(cx, nativeSQL_jsv);
+	char *nativeSQL = JS_EncodeString(cx, nativeSQL_str);
+
+	MYSQL *mysql = (MYSQL *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	struct prepared_statement *pstmt = malloc(sizeof(struct prepared_statement));
+	assert(pstmt); // FIXME return error
+	memset(pstmt, 0, sizeof(struct prepared_statement));
+
+	pstmt->stmt = mysql_stmt_init(mysql);
+	if (!pstmt->stmt)
+		return JS_FALSE; // FIXME free(pstmt)
+
+	if (mysql_stmt_prepare(pstmt->stmt, nativeSQL, strlen(nativeSQL))) {
+		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		return JS_FALSE; // FIXME free(pstmt)
+	}
+
+	pstmt->p_len = mysql_stmt_param_count(pstmt->stmt);
+	if (pstmt->p_len) {
+		pstmt->p_bind = malloc(pstmt->p_len * sizeof(MYSQL_BIND));
+		assert(pstmt->p_bind);
+		memset(pstmt->p_bind, 0, pstmt->p_len * sizeof(MYSQL_BIND));
+	}
+
+	/* Invoke mysql_stmt_fetch() with a zero-length buffer for all
+	 * colums, and pointers in which the real length can be stored.
+	 * This allows us to use mysql_stmt_fetch_column() with the
+	 * real length and to not force column types before calling
+	 * mysql_stmt_fetch(). This maps well to the JDBC API, where
+	 * individual colums are retrieved from the ResultSet after
+	 * executing the query.
+	 *
+	 * Using zero-length buffers is documented in the
+	 * mysql_stmt_fetch() manual page:
+	 * http://dev.mysql.com/doc/refman/5.1/en/mysql-stmt-fetch.html
+	 */
+	pstmt->r_len = mysql_stmt_field_count(pstmt->stmt);
+	if (pstmt->r_len) {
+		pstmt->r_bind = malloc(pstmt->r_len * sizeof(MYSQL_BIND));
+		assert(pstmt->r_bind);
+		memset(pstmt->r_bind, 0, pstmt->r_len * sizeof(MYSQL_BIND));
+		pstmt->r_bind_len = malloc(pstmt->r_len * sizeof(*(pstmt->r_bind_len)));
+		assert(pstmt->r_bind_len);
+	}
+
+	unsigned int i;
+	for (i = 0; i < pstmt->r_len; i++)
+		pstmt->r_bind[i].length = &pstmt->r_bind_len[i];
+
+	JSObject *robj = JS_NewObject(cx, &MysqlPreparedStatement_class, NULL, NULL);
+	JS_SetPrivate(robj, pstmt);
+
+	JS_DefineProperty(cx, robj, "connection", this, NULL, NULL, JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
+	JS_DefineFunctions(cx, robj, MysqlPreparedStatement_functions); // FIXME check return value
+
+	JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(robj));
+	return JS_TRUE;
+}
+
+static JSFunctionSpec MysqlConnection_functions[] = {
+	JS_FS("createStatement", MysqlConnection_createStatement, 0, 0),
+	JS_FS("nativeSQL", MysqlConnection_nativeSQL, 1, 0),
+	JS_FS("prepareStatement", MysqlConnection_prepareStatement, 1, 0),
+	JS_FS_END
+};
+
+/* }}} MysqlConnection */
+
+/* {{{ MysqlDriver */
 
 static JSBool MysqlDriver_acceptsURL(JSContext *cx, unsigned argc, jsval *vp)
 {
@@ -99,6 +418,7 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 	 * link the mysql object to it. */
 	JSObject *robj =  JS_NewObject(cx, &MysqlConnection_class, NULL, NULL);
 	JS_SetPrivate(robj, mysql);
+	JS_DefineFunctions(cx, robj, MysqlConnection_functions); // FIXME check return value
 	rval = OBJECT_TO_JSVAL(robj);
 
 out_clean:
@@ -122,6 +442,8 @@ static JSFunctionSpec MysqlDriver_functions[] = {
 	JS_FS_END
 };
 
+/* }}} MysqlDriver */
+
 JSBool JS_MysqlConstructAndRegister(JSContext *cx, JSObject *global)
 {
 	JSObject *obj = JS_NewObject(cx, NULL, NULL, NULL);
@@ -131,3 +453,5 @@ JSBool JS_MysqlConstructAndRegister(JSContext *cx, JSObject *global)
 
 	return JS_SqlRegisterDriver(cx, global, obj);
 }
+
+// vim: foldmethod=marker
