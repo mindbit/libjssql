@@ -1,5 +1,6 @@
 #include <mysql/mysql.h>
 #include <assert.h>
+#include <iconv.h>
 #include "js_mysql.h"
 
 struct prepared_statement {
@@ -13,6 +14,7 @@ struct prepared_statement {
 	MYSQL_BIND *r_bind;
 	unsigned int r_len;
 	unsigned long *r_bind_len;
+	my_bool *r_is_null;
 };
 
 /* {{{ MysqlStatement */
@@ -63,7 +65,107 @@ static JSClass MysqlPreparedResultSet_class = {
 
 static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
 {
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	uint32_t p;
+
+	if (argc < 1)
+		return JS_FALSE;
+	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &p))
+		return JS_FALSE;
+	if (p < 1 || p > pstmt->r_len)
+		return JS_FALSE;
+	if (pstmt->r_is_null[p - 1]) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		return JS_TRUE;
+	}
+
+	MYSQL_BIND bind;
+	double val;
+
+	memset(&bind, 0, sizeof(MYSQL_BIND));
+	bind.buffer_type = MYSQL_TYPE_DOUBLE;
+	bind.buffer = &val;
+	bind.buffer_length = sizeof(double);
+
+	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, p - 1, 0)) {
+		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		return JS_FALSE;
+	}
+
+	JS_SET_RVAL(cx, vp, JS_NumberValue(val));
+	return JS_TRUE;
+}
+
+static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	uint32_t p;
+
+	if (argc < 1)
+		return JS_FALSE;
+	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &p))
+		return JS_FALSE;
+	if (p < 1 || p > pstmt->r_len)
+		return JS_FALSE;
+	if (pstmt->r_is_null[p - 1]) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		return JS_TRUE;
+	}
+
+	if (!pstmt->r_bind_len[p - 1]) {
+		JS_SET_RVAL(cx, vp, JS_GetEmptyStringValue(cx));
+		return JS_TRUE;
+	}
+
+	MYSQL_BIND bind;
+
+	char *utf8buf = malloc(pstmt->r_bind_len[p - 1]);
+	assert(utf8buf);
+	// FIXME properly calculate utf16 string size
+	size_t utf16len = 2 * pstmt->r_bind_len[p - 1];
+	jschar *utf16buf = JS_malloc(cx, utf16len + 2);
+	assert(utf16buf);
+
+	memset(&bind, 0, sizeof(MYSQL_BIND));
+	bind.buffer_type = MYSQL_TYPE_STRING;
+	bind.buffer = utf8buf;
+	bind.buffer_length = pstmt->r_bind_len[p - 1];
+
+	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, p - 1, 0)) {
+		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		return JS_FALSE;
+	}
+
+	/* FIXME UTF16LE may be dependent to x86 platforms; on big-endian
+	 * platforms we might need to use UTF16BE instead, but this needs
+	 * to be checked.
+	 *
+	 * Using UTF16 causes extra 2 bytes at the beginning of output to
+	 * be used for the BOM (Byte Order Mark).
+	 */
+	iconv_t cd = iconv_open("UTF16LE", "UTF8");
+	assert(cd != (iconv_t) -1);
+
+	char *inbuf = utf8buf;
+	char *outbuf = (char *)utf16buf;
+	size_t inbytesleft = pstmt->r_bind_len[p - 1];
+	size_t outbytesleft = utf16len;
+	size_t ic = iconv(cd, &inbuf, &inbytesleft, &outbuf, &outbytesleft);
+	assert(ic != (size_t) -1);
+
+	free(utf8buf);
+
+	/* Add a null terminator, or we get an assertion failure if mozjs
+	 * is compiled with debugging */
+	*(jschar *)((char *)utf16buf + (utf16len - outbytesleft)) = 0;
+
+	JSString *val = JS_NewUCString(cx, utf16buf, (utf16len - outbytesleft) / sizeof(jschar));
+	if (!val)
+		return JS_FALSE;
+
+	JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(val));
 	return JS_TRUE;
 }
 
@@ -90,6 +192,7 @@ static JSBool MysqlPreparedResultSet_next(JSContext *cx, unsigned argc, jsval *v
 
 static JSFunctionSpec MysqlPreparedResultSet_functions[] = {
 	JS_FS("getNumber", MysqlPreparedResultSet_getNumber, 1, 0),
+	JS_FS("getString", MysqlPreparedResultSet_getString, 1, 0),
 	JS_FS("next", MysqlPreparedResultSet_next, 0, 0),
 	JS_FS_END
 };
@@ -299,11 +402,15 @@ static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsv
 		memset(pstmt->r_bind, 0, pstmt->r_len * sizeof(MYSQL_BIND));
 		pstmt->r_bind_len = malloc(pstmt->r_len * sizeof(*(pstmt->r_bind_len)));
 		assert(pstmt->r_bind_len);
+		pstmt->r_is_null = malloc(pstmt->r_len * sizeof(my_bool));
+		assert(pstmt->r_is_null);
 	}
 
 	unsigned int i;
-	for (i = 0; i < pstmt->r_len; i++)
+	for (i = 0; i < pstmt->r_len; i++) {
 		pstmt->r_bind[i].length = &pstmt->r_bind_len[i];
+		pstmt->r_bind[i].is_null = &pstmt->r_is_null[i];
+	}
 
 	JSObject *robj = JS_NewObject(cx, &MysqlPreparedStatement_class, NULL, NULL);
 	JS_SetPrivate(robj, pstmt);
@@ -413,6 +520,8 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 		mysql_close(mysql); //free(mysql);
 		goto out_clean;
 	}
+
+	mysql_set_character_set(mysql, "utf8"); // FIXME check return value
 
 	/* Connection is successful. Create a new connection object and
 	 * link the mysql object to it. */
