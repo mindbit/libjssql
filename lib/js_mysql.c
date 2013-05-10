@@ -292,6 +292,46 @@ static JSBool MysqlPreparedStatement_getUpdateCount(JSContext *cx, unsigned argc
 	return JS_TRUE;
 }
 
+static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	uint32_t p;
+
+	if (argc < 1)
+		return JS_FALSE;
+	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &p))
+		return JS_FALSE;
+	if (p < 1 || p > pstmt->p_len)
+		return JS_FALSE;
+	if (argc < 2 || JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		pstmt->p_bind[p - 1].buffer_type = MYSQL_TYPE_NULL;
+		return JS_TRUE;
+	}
+
+	JSString *str = JS_ValueToString(cx, JS_ARGV(cx, vp)[1]);
+
+	size_t jslen, clen;
+	const jschar *jsbuf = JS_GetStringCharsAndLength(cx, str, &jslen);
+
+	/* First determine the necessary size for the js buffer.
+	 * This is well documented in jsapi.h, just before the
+	 * prototype for JS_EncodeCharacters().
+	 */
+	JS_EncodeCharacters(cx, jsbuf, jslen, NULL, &clen); // FIXME check return value
+	char *cbuf = malloc(clen);
+	assert(cbuf);
+
+	JS_EncodeCharacters(cx, jsbuf, jslen, cbuf, &clen); // FIXME check return value
+	pstmt->p_bind[p - 1].buffer_type = MYSQL_TYPE_STRING;
+	pstmt->p_bind[p - 1].buffer = cbuf;
+	pstmt->p_bind[p - 1].buffer_length = clen;
+
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_TRUE;
+}
+
 static JSFunctionSpec MysqlPreparedStatement_functions[] = {
 	JS_FS("execute", MysqlPreparedStatement_execute, 0, 0),
 	JS_FS("executeQuery", MysqlPreparedStatement_executeQuery, 0, 0),
@@ -299,6 +339,7 @@ static JSFunctionSpec MysqlPreparedStatement_functions[] = {
 	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
 	JS_FS("getResultSet", MysqlPreparedStatement_getResultSet, 0, 0),
 	JS_FS("getUpdateCount", MysqlPreparedStatement_getUpdateCount, 0, 0),
+	JS_FS("setString", MysqlPreparedStatement_setString, 2, 0),
 	JS_FS_END
 };
 
