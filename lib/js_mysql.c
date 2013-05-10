@@ -199,6 +199,8 @@ static JSClass MysqlPreparedStatement_class = {
 
 static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statement *pstmt)
 {
+	unsigned int i;
+
 	if (pstmt->p_len && mysql_stmt_bind_param(pstmt->stmt, pstmt->p_bind)) {
 		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
 		return JS_FALSE;
@@ -208,6 +210,10 @@ static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statemen
 		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
 		return JS_FALSE;
 	}
+
+	for (i = 0; i < pstmt->p_len; i++)
+		if (pstmt->p_bind[i].buffer)
+			free(pstmt->p_bind[i].buffer);
 
 	if (pstmt->r_len && mysql_stmt_bind_result(pstmt->stmt, pstmt->r_bind)) {
 		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
@@ -304,6 +310,11 @@ static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsv
 		return JS_FALSE;
 	if (p < 1 || p > pstmt->p_len)
 		return JS_FALSE;
+	if (pstmt->p_bind[p - 1].buffer) {
+		free(pstmt->p_bind[p - 1].buffer);
+		// prevent second free in prepared_statement_execute()
+		pstmt->p_bind[p - 1].buffer = NULL;
+	}
 	if (argc < 2 || JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
 		JS_SET_RVAL(cx, vp, JSVAL_NULL);
 		pstmt->p_bind[p - 1].buffer_type = MYSQL_TYPE_NULL;
