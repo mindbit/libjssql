@@ -110,6 +110,8 @@ int main(int argc, const char *argv[])
 	JSContext *cx;
 	JSObject  *global;
 
+	JS_SetCStringsAreUTF8();
+
 	/* Create a JS runtime. You always need at least one runtime per process. */
 	rt = JS_NewRuntime(8 * 1024 * 1024);
 	if (rt == NULL)

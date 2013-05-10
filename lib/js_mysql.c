@@ -121,16 +121,12 @@ static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsv
 
 	MYSQL_BIND bind;
 
-	char *utf8buf = malloc(pstmt->r_bind_len[p - 1]);
-	assert(utf8buf);
-	// FIXME properly calculate utf16 string size
-	size_t utf16len = 2 * pstmt->r_bind_len[p - 1];
-	jschar *utf16buf = JS_malloc(cx, utf16len + 2);
-	assert(utf16buf);
+	char *cbuf = malloc(pstmt->r_bind_len[p - 1]);
+	assert(cbuf);
 
 	memset(&bind, 0, sizeof(MYSQL_BIND));
 	bind.buffer_type = MYSQL_TYPE_STRING;
-	bind.buffer = utf8buf;
+	bind.buffer = cbuf;
 	bind.buffer_length = pstmt->r_bind_len[p - 1];
 
 	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, p - 1, 0)) {
@@ -138,30 +134,24 @@ static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsv
 		return JS_FALSE;
 	}
 
-	/* FIXME UTF16LE may be dependent to x86 platforms; on big-endian
-	 * platforms we might need to use UTF16BE instead, but this needs
-	 * to be checked.
-	 *
-	 * Using UTF16 causes extra 2 bytes at the beginning of output to
-	 * be used for the BOM (Byte Order Mark).
+	size_t jslen;
+
+	/* First determine the necessary size for the js buffer.
+	 * This is well documented in jsapi.h, just before the
+	 * prototype for JS_EncodeCharacters().
 	 */
-	iconv_t cd = iconv_open("UTF16LE", "UTF8");
-	assert(cd != (iconv_t) -1);
+	JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[p - 1], NULL, &jslen); // FIXME check return value
+	jschar *jsbuf = JS_malloc(cx, (jslen + 1) * sizeof(jschar));
+	assert(jsbuf);
 
-	char *inbuf = utf8buf;
-	char *outbuf = (char *)utf16buf;
-	size_t inbytesleft = pstmt->r_bind_len[p - 1];
-	size_t outbytesleft = utf16len;
-	size_t ic = iconv(cd, &inbuf, &inbytesleft, &outbuf, &outbytesleft);
-	assert(ic != (size_t) -1);
-
-	free(utf8buf);
+	JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[p - 1], jsbuf, &jslen); // FIXME check return value
+	free(cbuf);
 
 	/* Add a null terminator, or we get an assertion failure if mozjs
 	 * is compiled with debugging */
-	*(jschar *)((char *)utf16buf + (utf16len - outbytesleft)) = 0;
+	jsbuf[jslen] = 0;
 
-	JSString *val = JS_NewUCString(cx, utf16buf, (utf16len - outbytesleft) / sizeof(jschar));
+	JSString *val = JS_NewUCString(cx, jsbuf, jslen);
 	if (!val)
 		return JS_FALSE;
 
