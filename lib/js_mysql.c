@@ -63,32 +63,32 @@ static JSClass MysqlPreparedResultSet_class = {
 	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
 };
 
-static inline JSBool MysqlPreparedResultSet_get(JSContext *cx, unsigned argc, jsval *vp, struct prepared_statement **pstmt, uint32_t *i, JSBool *ret)
+static inline JSBool MysqlPreparedResultSet_get(JSContext *cx, unsigned argc, jsval *vp, struct prepared_statement **pstmt, uint32_t *i, JSBool *result)
 {
 	jsval this = JS_THIS(cx, vp);
 	*pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	*ret = JS_FALSE;
+	*result = JS_FALSE;
 
-	if (argc < 1) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_FALSE;
-	}
-	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], i)) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_FALSE;
-	}
-	if (*i < 1 || *i > (*pstmt)->r_len) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_FALSE;
-	}
+	if (argc < 1)
+		goto out_false;
+
+	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], i))
+		goto out_false;
+
+	if (*i < 1 || *i > (*pstmt)->r_len)
+		goto out_false;
+
 	(*i)--;
 	if ((*pstmt)->r_is_null[*i]) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		*ret = JS_TRUE;
-		return JS_FALSE;
+		*result = JS_TRUE;
+		goto out_false;
 	}
 
 	return JS_TRUE;
+
+out_false:
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_FALSE;
 }
 
 static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
@@ -310,28 +310,50 @@ static JSBool MysqlPreparedStatement_getUpdateCount(JSContext *cx, unsigned argc
 	return JS_TRUE;
 }
 
-static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
+static inline JSBool MysqlPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp, struct prepared_statement **pstmt, uint32_t *i, JSBool *result)
 {
 	jsval this = JS_THIS(cx, vp);
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	uint32_t p;
+	*pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	*result = JS_FALSE;
 
 	if (argc < 1)
-		return JS_FALSE;
-	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &p))
-		return JS_FALSE;
-	if (p < 1 || p > pstmt->p_len)
-		return JS_FALSE;
-	if (pstmt->p_bind[p - 1].buffer) {
-		free(pstmt->p_bind[p - 1].buffer);
+		goto out_false;
+
+	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], i))
+		goto out_false;
+
+	if (*i < 1 || *i > (*pstmt)->p_len)
+		goto out_false;
+
+	(*i)--;
+	if ((*pstmt)->p_bind[*i].buffer) {
+		// free previously assigned value (buffer)
+		free((*pstmt)->p_bind[*i].buffer);
 		// prevent second free in prepared_statement_execute()
-		pstmt->p_bind[p - 1].buffer = NULL;
+		// if we never set any other value later
+		(*pstmt)->p_bind[*i].buffer = NULL;
 	}
 	if (argc < 2 || JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		pstmt->p_bind[p - 1].buffer_type = MYSQL_TYPE_NULL;
-		return JS_TRUE;
+		(*pstmt)->p_bind[*i].buffer_type = MYSQL_TYPE_NULL;
+		*result = JS_TRUE;
+		goto out_false;
 	}
+
+	return JS_TRUE;
+
+out_false:
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_FALSE;
+}
+
+static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
+{
+	JSBool ret;
+	struct prepared_statement *pstmt;
+	uint32_t i;
+
+	if (!MysqlPreparedStatement_set(cx, argc, vp, &pstmt, &i, &ret))
+		return ret;
 
 	JSString *str = JS_ValueToString(cx, JS_ARGV(cx, vp)[1]);
 
@@ -347,9 +369,9 @@ static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsv
 	assert(cbuf);
 
 	JS_EncodeCharacters(cx, jsbuf, jslen, cbuf, &clen); // FIXME check return value
-	pstmt->p_bind[p - 1].buffer_type = MYSQL_TYPE_STRING;
-	pstmt->p_bind[p - 1].buffer = cbuf;
-	pstmt->p_bind[p - 1].buffer_length = clen;
+	pstmt->p_bind[i].buffer_type = MYSQL_TYPE_STRING;
+	pstmt->p_bind[i].buffer = cbuf;
+	pstmt->p_bind[i].buffer_length = clen;
 
 	JS_SET_RVAL(cx, vp, JSVAL_NULL);
 	return JS_TRUE;
