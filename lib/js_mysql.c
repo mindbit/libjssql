@@ -63,22 +63,42 @@ static JSClass MysqlPreparedResultSet_class = {
 	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
 };
 
-static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
+static inline JSBool MysqlPreparedResultSet_get(JSContext *cx, unsigned argc, jsval *vp, struct prepared_statement **pstmt, uint32_t *i, JSBool *ret)
 {
 	jsval this = JS_THIS(cx, vp);
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	uint32_t p;
+	*pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	*ret = JS_FALSE;
 
-	if (argc < 1)
-		return JS_FALSE;
-	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &p))
-		return JS_FALSE;
-	if (p < 1 || p > pstmt->r_len)
-		return JS_FALSE;
-	if (pstmt->r_is_null[p - 1]) {
+	if (argc < 1) {
 		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_TRUE;
+		return JS_FALSE;
 	}
+	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], i)) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		return JS_FALSE;
+	}
+	if (*i < 1 || *i > (*pstmt)->r_len) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		return JS_FALSE;
+	}
+	(*i)--;
+	if ((*pstmt)->r_is_null[*i]) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		*ret = JS_TRUE;
+		return JS_FALSE;
+	}
+
+	return JS_TRUE;
+}
+
+static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
+{
+	JSBool ret;
+	struct prepared_statement *pstmt;
+	uint32_t i;
+
+	if (!MysqlPreparedResultSet_get(cx, argc, vp, &pstmt, &i, &ret))
+		return ret;
 
 	MYSQL_BIND bind;
 	double val;
@@ -88,7 +108,7 @@ static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsv
 	bind.buffer = &val;
 	bind.buffer_length = sizeof(double);
 
-	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, p - 1, 0)) {
+	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, i, 0)) {
 		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
 		return JS_FALSE;
 	}
@@ -99,37 +119,29 @@ static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsv
 
 static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsval *vp)
 {
-	jsval this = JS_THIS(cx, vp);
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	uint32_t p;
+	JSBool ret;
+	struct prepared_statement *pstmt;
+	uint32_t i;
 
-	if (argc < 1)
-		return JS_FALSE;
-	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], &p))
-		return JS_FALSE;
-	if (p < 1 || p > pstmt->r_len)
-		return JS_FALSE;
-	if (pstmt->r_is_null[p - 1]) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_TRUE;
-	}
+	if (!MysqlPreparedResultSet_get(cx, argc, vp, &pstmt, &i, &ret))
+		return ret;
 
-	if (!pstmt->r_bind_len[p - 1]) {
+	if (!pstmt->r_bind_len[i]) {
 		JS_SET_RVAL(cx, vp, JS_GetEmptyStringValue(cx));
 		return JS_TRUE;
 	}
 
 	MYSQL_BIND bind;
 
-	char *cbuf = malloc(pstmt->r_bind_len[p - 1]);
+	char *cbuf = malloc(pstmt->r_bind_len[i]);
 	assert(cbuf);
 
 	memset(&bind, 0, sizeof(MYSQL_BIND));
 	bind.buffer_type = MYSQL_TYPE_STRING;
 	bind.buffer = cbuf;
-	bind.buffer_length = pstmt->r_bind_len[p - 1];
+	bind.buffer_length = pstmt->r_bind_len[i];
 
-	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, p - 1, 0)) {
+	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, i, 0)) {
 		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
 		return JS_FALSE;
 	}
@@ -140,11 +152,11 @@ static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsv
 	 * This is well documented in jsapi.h, just before the
 	 * prototype for JS_EncodeCharacters().
 	 */
-	JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[p - 1], NULL, &jslen); // FIXME check return value
+	JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[i], NULL, &jslen); // FIXME check return value
 	jschar *jsbuf = JS_malloc(cx, (jslen + 1) * sizeof(jschar));
 	assert(jsbuf);
 
-	JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[p - 1], jsbuf, &jslen); // FIXME check return value
+	JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[i], jsbuf, &jslen); // FIXME check return value
 	free(cbuf);
 
 	/* Add a null terminator, or we get an assertion failure if mozjs
