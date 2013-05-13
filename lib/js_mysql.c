@@ -1,6 +1,8 @@
+#define _GNU_SOURCE
+#include <stdio.h>
 #include <mysql/mysql.h>
 #include <assert.h>
-#include <iconv.h>
+#include <inttypes.h>
 #include "js_mysql.h"
 
 struct prepared_statement {
@@ -16,6 +18,63 @@ struct prepared_statement {
 	unsigned long *r_bind_len;
 	my_bool *r_is_null;
 };
+
+struct generated_keys {
+	my_ulonglong last_insert_id;
+	int cursor;
+};
+
+/* {{{ MysqlPreparedGeneratedKeys */
+
+static JSClass MysqlGeneratedKeys_class = {
+	"MysqlGeneratedKeys", JSCLASS_HAS_PRIVATE,
+	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
+};
+
+static JSBool MysqlGeneratedKeys_getNumber(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	JS_SET_RVAL(cx, vp, JS_NumberValue((double)k->last_insert_id));
+	return JS_TRUE;
+}
+
+static JSBool MysqlGeneratedKeys_getString(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	char *cstr;
+
+	if (asprintf(&cstr, "%" PRIu64, (uint64_t)k->last_insert_id) == -1)
+		return JS_FALSE;
+	JSString *jsstr = JS_NewStringCopyZ(cx, cstr);
+	free(cstr);
+	JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(jsstr));
+	return JS_TRUE;
+}
+
+static JSBool MysqlGeneratedKeys_next(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (k->cursor < 1) {
+		k->cursor++;
+		JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(JS_TRUE));
+	} else
+		JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(JS_FALSE));
+	return JS_TRUE;
+}
+
+static JSFunctionSpec MysqlGeneratedKeys_functions[] = {
+	JS_FS("getNumber", MysqlGeneratedKeys_getNumber, 1, 0),
+	JS_FS("getString", MysqlGeneratedKeys_getString, 1, 0),
+	JS_FS("next", MysqlGeneratedKeys_next, 0, 0),
+	JS_FS_END
+};
+
+/* }}} MysqlPreparedGeneratedKeys */
 
 /* {{{ MysqlStatement */
 
@@ -282,6 +341,25 @@ static JSBool MysqlPreparedStatement_executeUpdate(JSContext *cx, unsigned argc,
 	return JS_TRUE;
 }
 
+static JSBool MysqlPreparedStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	struct generated_keys *priv = malloc(sizeof(struct generated_keys));
+	assert(priv);
+
+	priv->last_insert_id = mysql_stmt_insert_id(pstmt->stmt);
+	priv->cursor = 0;
+
+	JSObject *robj = JS_NewObject(cx, &MysqlGeneratedKeys_class, NULL, NULL);
+	JS_SetPrivate(robj, priv);
+	JS_DefineFunctions(cx, robj, MysqlGeneratedKeys_functions);
+
+	JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(robj));
+	return JS_TRUE;
+}
+
 static JSBool MysqlPreparedStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
@@ -409,6 +487,7 @@ static JSFunctionSpec MysqlPreparedStatement_functions[] = {
 	JS_FS("executeQuery", MysqlPreparedStatement_executeQuery, 0, 0),
 	JS_FS("executeUpdate", MysqlPreparedStatement_executeUpdate, 0, 0),
 	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
+	JS_FS("getGeneratedKeys", MysqlPreparedStatement_getGeneratedKeys, 0, 0),
 	JS_FS("getResultSet", MysqlPreparedStatement_getResultSet, 0, 0),
 	JS_FS("getUpdateCount", MysqlPreparedStatement_getUpdateCount, 0, 0),
 	JS_FS("setNumber", MysqlPreparedStatement_setNumber, 2, 0),
