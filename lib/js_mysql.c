@@ -346,6 +346,33 @@ out_false:
 	return JS_FALSE;
 }
 
+static JSBool MysqlPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsval *vp)
+{
+	JSBool ret;
+	struct prepared_statement *pstmt;
+	uint32_t i;
+
+	if (!MysqlPreparedStatement_set(cx, argc, vp, &pstmt, &i, &ret))
+		return ret;
+
+	double val;
+	if (!JS_ValueToNumber(cx, JS_ARGV(cx, vp)[1], &val)) {
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		return JS_FALSE;
+	}
+
+	double *buf = malloc(sizeof(double));
+	assert(buf);
+	*buf = val;
+
+	pstmt->p_bind[i].buffer_type = MYSQL_TYPE_DOUBLE;
+	pstmt->p_bind[i].buffer = buf;
+	pstmt->p_bind[i].buffer_length = 0;
+
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_TRUE;
+}
+
 static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
 {
 	JSBool ret;
@@ -384,6 +411,7 @@ static JSFunctionSpec MysqlPreparedStatement_functions[] = {
 	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
 	JS_FS("getResultSet", MysqlPreparedStatement_getResultSet, 0, 0),
 	JS_FS("getUpdateCount", MysqlPreparedStatement_getUpdateCount, 0, 0),
+	JS_FS("setNumber", MysqlPreparedStatement_setNumber, 2, 0),
 	JS_FS("setString", MysqlPreparedStatement_setString, 2, 0),
 	JS_FS_END
 };
