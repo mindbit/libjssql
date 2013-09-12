@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <mysql/mysql.h>
 #include <assert.h>
-#include <inttypes.h>
 #include "js_mysql.h"
 
 struct prepared_statement {
@@ -46,7 +45,7 @@ static JSBool MysqlGeneratedKeys_getString(JSContext *cx, unsigned argc, jsval *
 	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 	char *cstr;
 
-	if (asprintf(&cstr, "%" PRIu64, (uint64_t)k->last_insert_id) == -1)
+	if (asprintf(&cstr, "%ju", (uintmax_t)k->last_insert_id) == -1)
 		return JS_FALSE;
 	JSString *jsstr = JS_NewStringCopyZ(cx, cstr);
 	free(cstr);
