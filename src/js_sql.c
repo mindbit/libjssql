@@ -24,7 +24,7 @@ static JSBool DriverManager_getDriver(JSContext *cx, unsigned argc, jsval *vp)
 	// FIXME check return code; check that drivers is an array
 	JSObject *obj = JSVAL_TO_OBJECT(drivers);
 
-	jsuint len, i;
+	uint32_t len, i;
 	JS_GetArrayLength(cx, obj, &len);
 
 	for (i = 0; i < len; i++) {
@@ -54,7 +54,7 @@ static JSBool DriverManager_getConnection(JSContext *cx, unsigned argc, jsval *v
 	// FIXME check return code; check that drivers is an array
 	JSObject *obj = JSVAL_TO_OBJECT(drivers);
 
-	jsuint len, i;
+	uint32_t len, i;
 	JS_GetArrayLength(cx, obj, &len);
 
 
@@ -109,7 +109,7 @@ static JSBool DriverManager_registerDriver(JSContext *cx, unsigned argc, jsval *
 	// FIXME check return code; check that drivers is an array
 	JSObject *obj = JSVAL_TO_OBJECT(drivers);
 
-	jsuint len;
+	uint32_t len;
 	JS_GetArrayLength(cx, obj, &len);
 	JS_SetElement(cx, obj, len, JS_ARGV(cx, vp));
 

@@ -22,6 +22,8 @@
 #include <fcntl.h>
 
 #include "js_mysql.h"
+#include "js_postgres.h"
+#include "jssql_config.h"
 
 /* The class of the global object. */
 static JSClass global_class = {
@@ -120,6 +122,31 @@ static JSBool js_dump(JSContext *cx, unsigned argc, jsval *vp)
 	return JS_TRUE;
 }
 
+static int run_test(char *source, JSContext *cx, JSObject *global) {
+	int fd;
+	void *buf;
+	off_t len;
+
+	fd = open(source, O_RDONLY, 0);
+	if (fd < 0)
+		return -1;
+	
+	len = lseek(fd, 0, SEEK_END);
+	buf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
+
+	jsval rval;
+	uint lineno = 0;
+
+	JS_EvaluateScript(cx, global, buf, len, "noname", lineno, &rval);
+	
+	munmap(buf, len);
+	close(fd);
+	if (JSVAL_IS_INT(rval))
+		return JSVAL_TO_INT(rval);
+
+	return -1;
+}
+
 int main(int argc, const char *argv[])
 {
 	/* JSAPI variables. */
@@ -170,35 +197,32 @@ int main(int argc, const char *argv[])
 	if (!JS_SqlInit(cx, global))
 		return 1;
 
+	int ret_mysql = 0, ret_postgres = 0;
+
+#ifdef HAVE_MYSQL_MYSQL_H
+	printf ("[Running mysql tests ...]\n");
 	JS_MysqlConstructAndRegister(cx, global);
+	ret_mysql = run_test("test_mysql.js", cx, global);
+	printf("----------------------------------------------------\n");
+	printf("\n%s: test_mysql\n\n", (ret_mysql == 0)? "PASS" : "FAIL");
+#endif
 
-	int fd;
-	void *buf;
-	off_t len;
-
-	fd = open("test.js", O_RDONLY, 0);
-	len = lseek(fd, 0, SEEK_END);
-	buf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
-
-	/* Your application code here. This may include JSAPI calls
-	 * to create your own custom JavaScript objects and to run scripts.
-	 *
-	 * The following example code creates a literal JavaScript script,
-	 * evaluates it, and prints the result to stdout.
-	 *
-	 * Errors are conventionally saved in a JSBool variable named ok.
-	 */
-	jsval rval;
-	uint lineno = 0;
-
-	JS_EvaluateScript(cx, global, buf, len, "noname", lineno, &rval);
+#ifdef HAVE_POSTGRESQL_LIBPQ_FE_H
+	printf ("\n\n[Running postgresql tests ...]\n");
+	JS_PostgresConstructAndRegister(cx, global);	
+	ret_postgres = run_test("test_postgres.js", cx, global);
+	printf("----------------------------------------------------\n");
+	printf("\n%s: test_postgres\n\n", (ret_postgres == 0)? "PASS" : "FAIL");
+#endif
 	JS_EndRequest(cx); // needed by js-17.0.0 DEBUG
-	munmap(buf, len);
+
 	/* End of your application code */
 
 	/* Clean things up and shut down SpiderMonkey. */
 	JS_DestroyContext(cx);
 	JS_DestroyRuntime(rt);
 	JS_ShutDown();
-	return 0;
+
+	return ret_mysql && ret_postgres;
+
 }
