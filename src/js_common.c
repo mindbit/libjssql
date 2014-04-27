@@ -17,6 +17,14 @@
 
 #include "js_common.h"
 
+ /**
+  * getConnection - search for a connection property of an object
+  * and return the reference of the property
+  * @cx: JavaScript context
+  * @vp: the return value will be the connection property
+  *
+  * Returns JS_TRUE on success and JS_FALSE on failure
+  */
 JSBool getConnection(JSContext *cx, jsval *vp)
 {
 	jsval rval = JSVAL_NULL;
@@ -28,6 +36,15 @@ JSBool getConnection(JSContext *cx, jsval *vp)
 	return ret;
 }
 
+ /**
+  * createStatement - create a Statement object
+  * @cx: JavaScript context
+  * @vp: the return value will be the created object
+  * @class: the class of the object
+  * @functions: the functions assigned to the object
+  *
+  * Returns JS_TRUE on success and JS_FALSE on failure
+  */
 JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec *functions)
 {
 	JSBool ret = JS_TRUE;
@@ -58,7 +75,6 @@ out:
 	JS_SET_RVAL(cx, vp, rval);
 	return ret;
 }
-
 
  /**
   * nativeSQL - get the first parameter and convert it to string

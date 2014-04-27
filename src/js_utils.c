@@ -15,6 +15,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include "js_utils.h"
+
  /**
   * JSString_to_CString - convert JSString value to an array of chars
   * @cx: JavaScript context
@@ -22,9 +24,6 @@
   *
   * Returns NULL on failure and a pointer to the converted value on success
   */
-
-#include "js_utils.h"
-
 char *JSString_to_CString(JSContext * cx, jsval v)
 {
 	JSString *value = JS_ValueToString(cx, v);
@@ -60,7 +59,7 @@ out:
  * my_itoa - convert n to characters and returns the result
  * @n: number which will be converted
  */
-char *my_itoa(int n)
+ char *my_itoa(int n)
 {
 	int i, j, sign, digits, n_copy;
 	char *result;
