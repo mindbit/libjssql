@@ -238,6 +238,14 @@ AC_ARG_WITH(postgres,
       postgres=true)])
 AM_CONDITIONAL(HAVE_POSTGRESQL_LIBPQ_FE_H, test x$postgres = xtrue)
 
+
+AC_ARG_ENABLE([debug],
+    AS_HELP_STRING([--enable-debug], [Enable debugging mode]))
+
+AS_IF([test "x$enable_debug" = "xyes"], [
+  CFLAGS="$CFLAGS -DDEBUG"
+])
+
 # mysql
 if test "x$mysql" = "xfalse"
 then
