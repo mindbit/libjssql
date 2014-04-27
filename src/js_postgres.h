@@ -20,12 +20,20 @@
 
 #include <libpq-fe.h>
 #include "js_sql.h"
-#include "js_utils.h"
+#include "js_common.h"
 
 #define POSTGRES_URI			"postgresql://"
 #define POSTGRES_URI_LEN        13
 #define POSTGRES_DEFAULT_PORT   5432
 #define POSTGRES_CONNECTOR_LEN	256
+ 
+#define TEXT_RESULT				0
+#define BINARY_RESULT			1
+
+#define SIMPLE_STATEMENT		0
+#define PREPARED_STATEMENT 		1
+
+#define MAX_PARAMETERS			99
 
 JSBool JS_PostgresConstructAndRegister(JSContext *cx, JSObject *global);
 

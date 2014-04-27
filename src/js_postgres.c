@@ -18,6 +18,409 @@
 #define _GNU_SOURCE
 #include "js_postgres.h"
 
+struct statement {
+	char *command;
+	int type;
+
+	// parameters
+	unsigned int p_len;
+	char **p_values;
+
+	//connection
+	PGconn *conn;
+
+	// results
+	PGresult *result;
+};
+
+/**
+ * clear_statement - clear the statement structure
+ * @stmt: pointer to the structure
+ */
+static void clear_statement(struct statement *stmt)
+{
+	free(stmt->command);
+	if(stmt->type == PREPARED_STATEMENT) {
+		int i;
+		for (i = 0; i < stmt->p_len; i++)
+			free(stmt->p_values[i]);
+		free(stmt->p_values);
+	}
+	
+	PQclear(stmt->result);
+	free(stmt);
+}
+
+/**
+ * get_plen - count the parameters' number
+ * @nativeSQL: SQL command
+ */
+static int get_plen(char *nativeSQL)
+{
+	int i, p_len;
+
+	p_len = 0;
+
+	for (i = 0; nativeSQL[i]; i++) {
+		if (nativeSQL[i] == '?')
+			p_len++;
+	}
+
+	return p_len;
+}
+
+/**
+ * postgres_pstmt_conversion - convert a prepared statement to postgresql's one
+ * @dest: the result
+ * @source: SQL command which will be converted
+ */
+static void postgres_pstmt_conversion(char *dest, char *source)
+{
+	int i;
+	i = 1;
+
+	while (*source) {
+		if ((*source) == '?') {
+			*dest++ = '$';
+			char *nr = my_itoa(i);
+			int j, len;
+			len = strlen(nr);
+			for (j = 0; j < len; j++)
+				*dest++ = nr[j];
+			i++;
+			source++;
+			free(nr);
+		} else {
+			*dest++ = *source++;
+		}
+	}
+
+	*dest = '\0';
+}
+
+/**
+ * generate_statement - create a new statement using the SQL command
+ * @cx: the JavaScript context
+ * @cmd: SQL command
+ *
+ * Returns a pointer to the statement structure or NULL in case of failure.
+ */
+static struct statement *generate_statement(JSContext *cx, jsval cmd) {
+	struct statement *stmt = malloc(sizeof(struct statement));
+	
+	if (stmt == NULL) {
+		dlog(LOG_ALERT, "Failed to allocate memory for statement structure\n");
+		return NULL;
+	}
+	memset(stmt, 0, sizeof(struct statement));
+
+	char *nativeSQL = JSString_to_CString(cx, cmd);
+
+	stmt->p_len = get_plen(nativeSQL);
+	
+	/* it supports maximum 99 parameters */
+	if (stmt->p_len > MAX_PARAMETERS) {
+		free(stmt);
+		return NULL;
+	}
+
+	stmt->command = malloc((strlen(nativeSQL) + stmt->p_len + stmt->p_len / 10) *
+							sizeof(char));
+	if (stmt->command == NULL) {
+		free(stmt);
+		dlog(LOG_ALERT, "Failed to allocate memory for statement command\n");
+		return NULL;
+	}
+
+	if (stmt->p_len > 0) {
+		stmt->type = PREPARED_STATEMENT;
+		stmt->p_values = malloc(stmt->p_len * sizeof(char *));
+		if (stmt->p_values == NULL) {
+			free(stmt->command);
+			free(stmt);
+			dlog(LOG_ALERT, "Failed to allocate memory for statement values\n");
+			return NULL;
+		}
+		postgres_pstmt_conversion(stmt->command, nativeSQL);
+	} else {
+		stmt->type = SIMPLE_STATEMENT;
+		strcpy(stmt->command, nativeSQL);
+		stmt->p_values = NULL;
+	}
+
+	return stmt;
+}
+
+
+static JSClass PostgresResultSet_class = {
+	"PostgresResultSet",   //name of the class
+	JSCLASS_HAS_PRIVATE,    //flags
+	JS_PropertyStub,        //addProperty (default value JS_PropertyStrub)
+	JS_PropertyStub,        //delProperty (default)
+	JS_PropertyStub,        //getProperty (default)
+	JS_StrictPropertyStub,  //setProperty (default value JS_StrictPropertyStub)
+	JS_EnumerateStub,       //enumerate (default)
+	JS_ResolveStub,         //resolve -lazy properties(default)
+	JS_ConvertStub,         //conversion to primitive value (default)
+	NULL, //optional members
+};
+
+static JSFunctionSpec PostgresResultSet_functions[] = {
+	JS_FS_END
+};
+
+/**
+ * statement_get_result_set - Create a ResultSet object
+ * @cx: the JavaScript context
+ * @stmt: pointer tot the structure which contains the result
+ * @vp: return value
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
+static JSBool
+statement_get_result_set(JSContext *cx, struct statement *stmt, jsval *vp)
+{
+	JSBool ret = JS_TRUE;
+	jsval rval = JSVAL_NULL;
+
+	JSObject *obj = JS_NewObject(cx, &PostgresResultSet_class, NULL, NULL);
+	if (obj == NULL) {
+		ret = JS_FALSE;
+		JS_ReportError(cx, "Failed to create a new object\n");
+		dlog(LOG_ALERT, "Failed to create a new object\n");
+		goto out;
+	}
+
+	JS_SetPrivate(obj, stmt);
+	
+	if (JS_DefineFunctions(cx, obj, PostgresResultSet_functions) == JS_FALSE) {
+		ret = JS_FALSE;
+		JS_ReportError(cx, "Failed to define functions for PostgresResultSet\n");
+		dlog(LOG_ALERT, "Failed to define functions for PostgresResultSet\n");
+		goto out;
+	}
+
+	rval = OBJECT_TO_JSVAL(obj);
+
+out:
+	JS_SET_RVAL(cx, vp, rval);
+	return ret;
+}
+
+/**
+ * Postgres_setStatement - Create a new statement using the SQL command and save
+ * it in the Statement's objects properties. 
+ * @cx: the JavaScript context
+ * @argc: arguments number
+ * @vp: return value
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
+static JSBool Postgres_setStatement(JSContext *cx, unsigned argc, jsval *vp)
+{
+	JSBool ret = JS_TRUE;
+	jsval this = JS_THIS(cx, vp);
+	jsval nativeSQL_argv[] = {JS_ARGV(cx, vp)[0]};
+	jsval nativeSQL_jsv;
+	jsval conn;
+
+	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(this), "getConnection",
+							argc, vp, &conn)) {
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to call getConnection\n");
+		goto out;
+	}
+
+	if (JSVAL_IS_NULL(conn)) {
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "NULL Connection\n");
+		goto out;
+	}
+
+	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(conn), "nativeSQL", 1,
+							nativeSQL_argv, &nativeSQL_jsv)) {
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to call nativeSQL\n");
+		goto out;
+	}
+
+	struct statement *stmt = generate_statement(cx, nativeSQL_jsv);
+	if (stmt == NULL) {
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to generate the statement\n");
+		goto out;
+	}
+
+	stmt->conn = (PGconn *)JS_GetPrivate(JSVAL_TO_OBJECT(conn));
+	if (PQstatus(stmt->conn) != CONNECTION_OK) {
+		dlog(LOG_ALERT, "Wrong connection status %s\n", PQerrorMessage(stmt->conn));
+		free(stmt->command);
+		free(stmt->p_values);
+		free(stmt);
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	JS_SetPrivate(JSVAL_TO_OBJECT(this), stmt);
+out:
+	return ret;
+}
+
+/**
+ * PostgresStatement_execute - Executes the given SQL statement, 
+ * which may return multiple results.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure.
+ */
+static JSBool PostgresStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
+{	
+	if (Postgres_setStatement(cx, argc, vp) == JS_FALSE)
+		return JS_FALSE;
+
+	jsval this = JS_THIS(cx, vp);
+	struct statement *stmt = 
+		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (stmt->type != SIMPLE_STATEMENT) {
+		dlog(LOG_INFO, "Wrong statement type! You should use prepared statement\n");
+		return JS_FALSE;
+	}
+
+	stmt->result = PQexec(stmt->conn, stmt->command);
+
+	if (PQresultStatus(stmt->result) != PGRES_COMMAND_OK) {
+		dlog(LOG_ERR, "%s command failed: %s\n",
+			stmt->command, PQerrorMessage(stmt->conn));
+		PQclear(stmt->result);
+		//PQfinish(stmt->conn);
+		return JS_FALSE;
+	}
+
+	clear_statement(stmt);
+
+	return JS_TRUE;
+}
+
+/**
+ * PostgresStatement_executeQuery - Executes the given SQL statement, 
+ * which returns a single result. 
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure and saves the ResultSet in vp.
+ */
+static JSBool
+PostgresStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
+{
+	if (Postgres_setStatement(cx, argc, vp) == JS_FALSE)
+		return JS_FALSE;
+
+	jsval this = JS_THIS(cx, vp);
+	struct statement *stmt = 
+		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (stmt->type != SIMPLE_STATEMENT) {
+		dlog(LOG_INFO, "Wrong statement type! You should use prepared statement\n");
+		return JS_FALSE;
+	}
+
+	stmt->result = PQexec(stmt->conn, stmt->command);
+
+	if (PQresultStatus(stmt->result) != PGRES_TUPLES_OK) {
+		dlog(LOG_ERR, "%s command failed: %s\n",
+			stmt->command, PQerrorMessage(stmt->conn));
+		PQclear(stmt->result);
+		//PQfinish(stmt->conn);
+		return JS_FALSE;
+	}
+
+	return statement_get_result_set(cx, stmt, &JS_RVAL(cx, vp));
+}
+
+/**
+ * PostgresStatement_executeUpdate - Executes the given SQL statement, which may 
+ * be an INSERT, UPDATE, or DELETE statement or an SQL statement that returns 
+ * nothing, such as an SQL DDL statement.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure and saves the affected
+ * rows number in vp.
+ */
+static JSBool
+PostgresStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
+{
+	if (Postgres_setStatement(cx, argc, vp) == JS_FALSE)
+		return JS_FALSE;
+
+	jsval this = JS_THIS(cx, vp);
+	struct statement *stmt = 
+		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (stmt->type != SIMPLE_STATEMENT) {
+		dlog(LOG_INFO, "Wrong statement type! You should use prepared statement\n");
+		return JS_FALSE;
+	}
+
+	stmt->result = PQexec(stmt->conn, stmt->command);
+
+	if (PQresultStatus(stmt->result) != PGRES_TUPLES_OK &&
+		PQresultStatus(stmt->result) != PGRES_COMMAND_OK) {
+		dlog(LOG_ERR, "%s command failed: %s\n",
+			stmt->command, PQerrorMessage(stmt->conn));
+		PQclear(stmt->result);
+		//PQfinish(stmt->conn);
+		return JS_FALSE;
+	}
+
+	JS_SET_RVAL(cx, vp, JS_NumberValue(atoi(PQcmdTuples(stmt->result))));
+	
+	clear_statement(stmt);
+
+	return JS_TRUE;
+}
+
+/**
+ * PostgresStatement_getConnection - Executes the given SQL statement, 
+ * which may return multiple results.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
+static JSBool
+PostgresStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return getConnection(cx, vp);
+}
+
+static JSFunctionSpec PostgresStatement_functions[] = {
+	JS_FS("execute", PostgresStatement_execute, 1, 0),
+	JS_FS("executeQuery", PostgresStatement_executeQuery, 1, 0),
+	JS_FS("executeUpdate", PostgresStatement_executeUpdate, 1, 0),
+	JS_FS("getConnection", PostgresStatement_getConnection, 1, 0),
+	JS_FS_END
+};
+
+static JSClass PostgresStatement_class = {
+	"PostgresConnection",   //name of the class
+	JSCLASS_HAS_PRIVATE,    //flags
+	JS_PropertyStub,        //addProperty (default value JS_PropertyStrub)
+	JS_PropertyStub,        //delProperty (default)
+	JS_PropertyStub,        //getProperty (default)
+	JS_StrictPropertyStub,  //setProperty (default value JS_StrictPropertyStub)
+	JS_EnumerateStub,       //enumerate (default)
+	JS_ResolveStub,         //resolve -lazy properties(default)
+	JS_ConvertStub,         //conversion to primitive value (default)
+	NULL, //optional members
+};
+
 static JSClass PostgresConnection_class = {
 	"PostgresConnection",   //name of the class
 	JSCLASS_HAS_PRIVATE,    //flags
@@ -31,7 +434,55 @@ static JSClass PostgresConnection_class = {
 	NULL, //optional members
 };
 
+/**
+ * PostgresConnection_createStatement - Used to create a Statement object
+ * @cx: JavaScript context
+ * @argc: number of argumets
+ * @vp: arguments array
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure.
+ */
+static JSBool 
+PostgresConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return createStatement(cx, vp, &PostgresStatement_class,
+							PostgresStatement_functions);
+}
+
+/**
+ * PostgresConnection_prepareStatement - Used to create a PreparedStatement 
+ * object.
+ * @cx: JavaScript context
+ * @argc: number of argumets
+ * @vp: arguments array
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure.
+ */
+static JSBool
+PostgresConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return JS_FALSE;
+}
+
+/**
+ * PostgresConnection_nativeSQL - Used to convert SQL commands to native SQL
+ * @cx: JavaScript context
+ * @argc: number of argumets
+ * @vp: arguments array
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure and saves the converted
+ * value to vp.
+ */
+static JSBool
+PostgresConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return nativeSQL(cx, argc, vp);
+}
+
 static JSFunctionSpec PostgresConnection_functions[] = {
+	JS_FS("createStatement", PostgresConnection_createStatement, 0, 0),
+	JS_FS("prepareStatement", PostgresConnection_prepareStatement, 1, 0),
+	JS_FS("nativeSQL", PostgresConnection_nativeSQL, 1, 0),
 	JS_FS_END
 };
 
@@ -75,11 +526,11 @@ out:
  * @argc: number of argumets
  * @vp: arguments array
  *
- * Returns JS_TRUE on succeed and JS_FALSE on failure
+ * Returns JS_TRUE on success and JS_FALSE on failure
  */
 static JSBool PostgresDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 {
-	JSBool ret = JS_FALSE;
+	JSBool ret = JS_TRUE;
 	jsval rval = JSVAL_NULL;
 	if (!argc)
 		goto out;
@@ -91,8 +542,6 @@ static JSBool PostgresDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 		dlog(LOG_ALERT, "Failed to convert the URL value to JSString\n");
 		goto out_clean;
 	}
-
-	ret = JS_TRUE;
 
 	if (strncmp(url, POSTGRES_URI, POSTGRES_URI_LEN)) {
 		JS_ReportWarning(cx, "Invalid url. It should start with %s\n",
@@ -127,19 +576,22 @@ static JSBool PostgresDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 		printf("here");
 		goto invalid_url;
 	}
-	dlog(LOG_INFO, "[INFO] %s %d %s\n", host, port, cursor);
+
 	//TODO Move the common code in a separated source
  	char *user = NULL, *passwd = NULL;
-	if (argc > 1 && !JSVAL_IS_PRIMITIVE(JS_ARGV(cx, vp)[1]) && !JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
+	if (argc > 1 && !JSVAL_IS_PRIMITIVE(JS_ARGV(cx, vp)[1]) &&
+		!JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
 		JSObject *info = JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[1]);
 		jsval user_jsv, passwd_jsv;
 
-		if (JS_GetProperty(cx, info, "user", &user_jsv) && !JSVAL_IS_NULL(user_jsv)) {
+		if (JS_GetProperty(cx, info, "user", &user_jsv) && 
+			!JSVAL_IS_NULL(user_jsv)) {
 			JSString *user_str = JS_ValueToString(cx, user_jsv);
 			user = JS_EncodeString(cx, user_str);
 		}
 
-		if (JS_GetProperty(cx, info, "password", &passwd_jsv) && !JSVAL_IS_NULL(passwd_jsv)) {
+		if (JS_GetProperty(cx, info, "password", &passwd_jsv) &&
+			!JSVAL_IS_NULL(passwd_jsv)) {
 			JSString *passwd_str = JS_ValueToString(cx, passwd_jsv);
 			passwd = JS_EncodeString(cx, passwd_str);
 		}
@@ -212,7 +664,7 @@ static JSFunctionSpec PostgresDriver_functions[] = {
  * @cx: JavaScript context
  * @global: global JavaScript object
  *
- * Returns JS_TRUE on succeed and JS_FALSE on failure
+ * Returns JS_TRUE on success and JS_FALSE on failure
  */
 JSBool JS_PostgresConstructAndRegister(JSContext * cx, JSObject * global)
 {
