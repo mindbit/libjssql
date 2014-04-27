@@ -15,12 +15,14 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef _JS_MYSQL_H
-#define _JS_MYSQL_H
+#ifndef _JS_COMMON_H
+#define _JS_COMMON_H
 
-#include "js_sql.h"
-#include "js_common.h"
- 
-JSBool JS_MysqlConstructAndRegister(JSContext *cx, JSObject *global);
+#include <jsapi.h>
+#include "js_debug.h"
+#include "js_utils.h"
+
+JSBool getConnection(JSContext *cx, jsval *vp);
+JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec *functions);       
 
 #endif

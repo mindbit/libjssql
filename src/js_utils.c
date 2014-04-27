@@ -45,6 +45,7 @@ char *JSString_to_CString(JSContext * cx, jsval v)
 		goto out_clean;
 	}
 
+	//FIXME not sure is this is safe
 	JS_RemoveStringRoot(cx, &value);
 
 	return value_str;
@@ -53,4 +54,53 @@ out_clean:
 	JS_RemoveStringRoot(cx, &value);
 out:
 	return NULL;
+}
+
+/**
+ * my_itoa - convert n to characters and returns the result
+ * @n: number which will be converted
+ */
+char *my_itoa(int n)
+{
+	int i, j, sign, digits, n_copy;
+	char *result;
+
+	digits = 0;
+	
+	if ((sign = n) < 0) { /* record sign */
+		n = -n;          /* make n positive */
+		digits++;
+	}
+
+	n_copy = n;
+
+	/* count the digits */
+	do {
+		digits++;
+		n_copy = n_copy / 10;
+	} while(n_copy > 0);
+
+	result = malloc((digits + 1) * sizeof(char));
+	if (result == NULL)
+		return NULL;
+
+	i = 0;
+	
+	do {       /* generate digits in reverse order */
+		result[i++] = n % 10 + '0';   /* get next digit */
+	} while ((n /= 10) > 0);     /* delete it */
+	
+	if (sign < 0)
+		result[i++] = '-';
+	result[i] = '\0';
+
+	char c;
+
+	for (i = 0, j = digits - 1; i < j; i++, j--) {
+		c = result[i];
+		result[i] = result[j];
+		result[j] = c;
+	}
+
+	return result;
 }

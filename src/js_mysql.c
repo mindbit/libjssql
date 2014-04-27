@@ -111,13 +111,7 @@ static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *
 
 static JSBool MysqlStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
 {
-	jsval rval = JSVAL_NULL;
-	JSBool ret = JS_FALSE;
-	if (JS_LookupProperty(cx, JS_THIS_OBJECT(cx, vp), "connection", &rval))
-		ret = JS_TRUE;
-
-	JS_SET_RVAL(cx, vp, rval);
-	return ret;
+	return getConnection(cx, vp);
 }
 
 static JSFunctionSpec MysqlStatement_functions[] = {
@@ -523,30 +517,12 @@ static JSClass MysqlConnection_class = {
 
 static JSBool MysqlConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
 {
-	JSObject *obj = JS_NewObject(cx, NULL, NULL, NULL);
-
-	JS_DefineProperty(cx, obj, "connection", JS_THIS(cx, vp), NULL, NULL, JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
-	JS_DefineFunctions(cx, obj, MysqlStatement_functions); // FIXME check return value
-
-	JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(obj));
-	return JS_TRUE;
+	return createStatement(cx, vp, NULL, MysqlStatement_functions);
 }
 
 static JSBool MysqlConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
 {
-	if (argc < 1) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_FALSE;
-	}
-
-	JSString *str = JS_ValueToString(cx, JS_ARGV(cx, vp)[0]);
-	if (str) {
-		JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(str));
-		return JS_TRUE;
-	}
-
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-	return JS_FALSE;
+	return nativeSQL(cx, argc, vp);
 }
 
 static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)

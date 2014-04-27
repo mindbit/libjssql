@@ -200,15 +200,15 @@ int main(int argc, const char *argv[])
 	int ret_mysql = 0, ret_postgres = 0;
 
 #ifdef HAVE_MYSQL_MYSQL_H
-	printf ("[Running mysql tests ...]\n");
+	printf ("[Running mysql tests]\n");
 	JS_MysqlConstructAndRegister(cx, global);
 	ret_mysql = run_test("test_mysql.js", cx, global);
 	printf("----------------------------------------------------\n");
-	printf("\n%s: test_mysql\n\n", (ret_mysql == 0)? "PASS" : "FAIL");
+	printf("\n%s: test_mysql\n", (ret_mysql == 0)? "PASS" : "FAIL");
 #endif
 
 #ifdef HAVE_POSTGRESQL_LIBPQ_FE_H
-	printf ("\n\n[Running postgresql tests ...]\n");
+	printf ("\n[Running postgresql tests]\n");
 	JS_PostgresConstructAndRegister(cx, global);	
 	ret_postgres = run_test("test_postgres.js", cx, global);
 	printf("----------------------------------------------------\n");

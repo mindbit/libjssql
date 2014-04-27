@@ -2,7 +2,8 @@ lib_LTLIBRARIES = libjssql.la
 
 libjssql_la_SOURCES = \
   js_sql.c \
-  js_utils.c
+  js_utils.c \
+  js_common.c
 
 if HAVE_POSTGRESQL_LIBPQ_FE_H
   libjssql_la_SOURCES += js_postgres.c
