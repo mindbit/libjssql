@@ -35,6 +35,25 @@ struct statement {
 };
 
 /**
+ * pretty_printer - internal function used for debugging
+ * @stmt: pointer to the structure
+ */
+static void pretty_printer(struct statement *stmt)
+{
+	unsigned int i;
+
+	dlog(LOG_INFO, "Statement type: %s | Parameters number %d\n", 
+		(stmt->type == SIMPLE_STATEMENT)? "SIMPLE_STATEMENT":"PREPARED_STATEMENT", 
+		stmt->p_len);
+	dlog(LOG_INFO, "Statement :\"%s\"\n", stmt->command);
+	
+	for (i = 0; i < stmt->p_len; i++) {
+		dlog(LOG_INFO, "%d argument: %s\n", i + 1, 
+			(stmt->p_values[i] == NULL)? "NULL":stmt->p_values[i]);		
+	}
+}
+
+/**
  * clear_statement - clears the statement structure
  * @stmt: pointer to the structure
  */
