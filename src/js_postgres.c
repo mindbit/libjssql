@@ -483,6 +483,207 @@ static JSClass PostgresStatement_class = {
 	NULL, 					//optional members
 };
 
+
+/**
+ * PostgresPreparedStatement_set - Generic set parameter function
+ * which may return multiple results.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure.
+ */
+static inline JSBool
+PostgresPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp, 
+		struct statement **stmt)
+{
+	jsval this = JS_THIS(cx, vp);
+	*stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	JSBool ret = JS_TRUE;
+	int pos;
+
+	if (*stmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	if (argc < 1) {
+		dlog(LOG_WARNING, "Wrong number of arguments\n");
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	if (!JSVAL_IS_INT(JS_ARGV(cx, vp)[0])) {
+		dlog(LOG_WARNING, "The first parameter should be a number \
+			which represents the position of the parameter\n");
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	pos = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
+
+ 	if ( pos > (*stmt)->p_len || pos < 1) {
+		dlog(LOG_WARNING, "The position is incorrect!\n");
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	pos--;
+
+	if ((*stmt)->p_values[pos] != NULL) {
+		dlog(LOG_INFO, "The element from position %d was already set : %s.\n", pos + 1, (*stmt)->p_values[pos] );
+		free((*stmt)->p_values[pos]);
+		(*stmt)->p_values[pos] = NULL;
+	}
+
+	//if the parameter is NULL, let the value to remain NULL
+	if (argc < 2 || JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
+		(*stmt)->p_values[pos] = NULL;
+	} else {
+		char *value = JSString_to_CString(cx, JS_ARGV(cx, vp)[1]);
+		(*stmt)->p_values[pos] = malloc (strlen(value) * sizeof(char));
+		if ((*stmt)->p_values[pos] == NULL) {
+			dlog(LOG_WARNING, "Failed to allocate memory\n");
+			ret = JS_FALSE;
+			free(value);
+			goto out;
+		}
+		strcpy((*stmt)->p_values[pos], value);
+		free(value);
+	}
+
+out:
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return ret;
+}
+
+/**
+ * PostgresPreparedStatement_execute - Executes the given SQL statement, 
+ * which may return multiple results.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure.
+ */
+static JSBool
+PostgresPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsval *vp)
+{
+	struct statement *stmt;
+	jsval this = JS_THIS(cx, vp);
+	jsval ret = JSVAL_TRUE;
+	
+	stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (!JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) ||
+		JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
+		dlog(LOG_WARNING, "The value is not a number!\n");
+		ret = JSVAL_FALSE;
+		goto out;
+	}
+
+	ret = BOOLEAN_TO_JSVAL(PostgresPreparedStatement_set(cx, argc, vp, &stmt));
+
+out:
+	JS_SET_RVAL(cx, vp, ret);
+	return JS_TRUE;
+}
+
+/**
+ * PostgresPreparedStatement_execute - Executes the given SQL statement, 
+ * which may return multiple results.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure.
+ */
+static JSBool
+PostgresPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
+{
+	struct statement *stmt;
+	jsval this = JS_THIS(cx, vp);
+	jsval ret = JSVAL_TRUE;
+	
+	stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (!JSVAL_IS_STRING(JS_ARGV(cx, vp)[1]) || 
+		JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
+		dlog(LOG_WARNING, "The value is not a string!\n");
+		ret = JSVAL_FALSE;
+		goto out;
+	}
+
+	ret = BOOLEAN_TO_JSVAL(PostgresPreparedStatement_set(cx, argc, vp, &stmt));
+
+out:
+	JS_SET_RVAL(cx, vp, ret);
+	return JS_TRUE;
+}
+
+/**
+ * PostgresPreparedStatement_getGeneratedKeys - Returns the generated keys
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ */
+static JSBool
+PostgresPreparedStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return JS_TRUE;
+}
+
+/**
+ * PostgresPreparedStatement_getResultSet - Returns the result set
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ */
+static JSBool
+PostgresPreparedStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return JS_TRUE;
+}
+
+/**
+ * PostgresPreparedStatement_getUpdateCount - Returns the number of updated rows
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ */
+static JSBool
+PostgresPreparedStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return JS_TRUE;
+}
+
+static JSFunctionSpec PostgresPreparedStatement_functions[] = {
+	JS_FS("execute", PostgresStatement_execute, 0, 0),
+	JS_FS("executeQuery", PostgresStatement_executeQuery, 0, 0),
+	JS_FS("executeUpdate", PostgresStatement_executeUpdate, 0, 0),
+	JS_FS("getConnection", PostgresStatement_getConnection, 1, 0),
+	JS_FS("getGeneratedKeys", PostgresPreparedStatement_getGeneratedKeys, 0, 0),
+	JS_FS("getResultSet", PostgresPreparedStatement_getResultSet, 0, 0),
+	JS_FS("getUpdateCount", PostgresPreparedStatement_getUpdateCount, 0, 0),
+	JS_FS("setNumber", PostgresPreparedStatement_setNumber, 2, 0),
+	JS_FS("setString", PostgresPreparedStatement_setString, 2, 0),
+	JS_FS_END
+};
+
+static JSClass PostgresPreparedStatement_class = {
+	"PostgresPreparedStatement",	//name of the class
+	JSCLASS_HAS_PRIVATE,    		//flags
+	JS_PropertyStub,        		//addProperty (default value JS_PropertyStrub)
+	JS_PropertyStub,        		//delProperty (default)
+	JS_PropertyStub,        		//getProperty (default)
+	JS_StrictPropertyStub,  		//setProperty (default value JS_StrictPropertyStub)
+	JS_EnumerateStub,       		//enumerate (default)
+	JS_ResolveStub,         		//resolve -lazy properties(default)
+	JS_ConvertStub,         		//conversion to primitive value (default)
+	NULL, 							//optional members
+};
+
 /**
  * PostgresConnection_createStatement - Used to create a Statement object
  * @cx: JavaScript context
@@ -510,6 +711,32 @@ PostgresConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
 static JSBool
 PostgresConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
 {
+	jsval rval = JSVAL_NULL;
+
+	JSObject *obj = JS_NewObject(cx, &PostgresPreparedStatement_class, NULL, NULL);
+	if (obj == NULL) {
+		JS_ReportError(cx, "Failed to create a new object\n");
+		dlog(LOG_ALERT, "Failed to create a new object\n");
+		goto out;
+	}
+
+	JS_DefineProperty(cx, obj, "connection", 
+					JS_THIS(cx, vp), NULL, NULL, 
+					JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
+
+	if (JS_DefineFunctions(cx, obj, PostgresPreparedStatement_functions) == JS_FALSE) {
+		JS_ReportError(cx, "Failed to define functions in createStatement\n");
+		dlog(LOG_ALERT, "Failed to define functions in createStatement\n");
+		goto out;
+	}
+
+	if (Postgres_setStatement(cx, argc, vp, OBJECT_TO_JSVAL(obj)) == JS_FALSE)
+		goto out;
+
+	rval = OBJECT_TO_JSVAL(obj);
+
+out:
+	JS_SET_RVAL(cx, vp, rval);
 	return JS_TRUE;
 }
 
@@ -579,7 +806,7 @@ static JSBool PostgresDriver_acceptsURL(JSContext * cx, unsigned argc, jsval * v
 
 out:
 	JS_SET_RVAL(cx, vp, JSVAL_FALSE);
-	return JS_FALSE;
+	return JS_TRUE;
 }
 
 /**
@@ -635,7 +862,6 @@ static JSBool PostgresDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 	} else if (*cursor == '/') {
 		*(cursor++) = '\0';
 	} else {
-		printf("here");
 		goto invalid_url;
 	}
 
