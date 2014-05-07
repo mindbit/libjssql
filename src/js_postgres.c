@@ -359,9 +359,14 @@ static JSBool PostgresStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
 
 	struct statement *stmt = 
 		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	if (stmt == NULL) {
+		ret = JS_FALSE;
+		goto out;
+	}
 
 	ret = execute_statement(cx, argc, vp, stmt);
-	clear_statement(stmt);
+	if (stmt->type == SIMPLE_STATEMENT)
+		clear_statement(stmt);
 
 out:
 	JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(ret));
@@ -391,6 +396,9 @@ PostgresStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
 
 	struct statement *stmt = 
 		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (stmt == NULL)
+		goto out;
 
 	if (execute_statement(cx, argc, vp, stmt) == JS_FALSE) {
 		clear_statement(stmt);
@@ -433,6 +441,8 @@ PostgresStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
 
 	struct statement *stmt = 
 		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	if (stmt == NULL)
+		goto out;
 
 	if (execute_statement(cx, argc, vp, stmt) == JS_FALSE) {
 		clear_statement(stmt);
@@ -440,7 +450,8 @@ PostgresStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
 	}
 
 	rval = JS_NumberValue(atoi(PQcmdTuples(stmt->result)));	
-	clear_statement(stmt);
+	if(stmt->type == SIMPLE_STATEMENT)
+		clear_statement(stmt);
 
 out:
 	JS_SET_RVAL(cx, vp, rval);
@@ -643,6 +654,21 @@ PostgresPreparedStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *
 static JSBool
 PostgresPreparedStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
 {
+	jsval this = JS_THIS(cx, vp);
+
+	struct statement *stmt = 
+		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (stmt == NULL)
+		goto out;
+
+	if (statement_get_result_set(cx, stmt, &JS_RVAL(cx, vp)) == JS_FALSE)
+		goto out;
+
+	return JS_TRUE;
+
+out:
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
 	return JS_TRUE;
 }
 
@@ -655,6 +681,19 @@ PostgresPreparedStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
 static JSBool
 PostgresPreparedStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
 {
+	jsval rval = JS_NumberValue(-1);
+	jsval this = JS_THIS(cx, vp);
+
+	struct statement *stmt = 
+		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (stmt == NULL || stmt->result == NULL)
+		goto out;
+
+	rval = JS_NumberValue(atoi(PQcmdTuples(stmt->result)));	
+	
+out:
+	JS_SET_RVAL(cx, vp, rval);
 	return JS_TRUE;
 }
 
