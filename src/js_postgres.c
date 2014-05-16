@@ -753,15 +753,14 @@ static JSClass PostgresStatement_class = {
  * Returns JS_TRUE on success and JS_FALSE on failure.
  */
 static inline JSBool
-PostgresPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp, 
-		struct statement **stmt)
+PostgresPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
-	*stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 	JSBool ret = JS_TRUE;
 	int pos;
 
-	if (*stmt == NULL) {
+	if (stmt == NULL) {
 		dlog(LOG_ALERT, "The statement property is not set\n");
 		ret = JS_FALSE;
 		goto out;
@@ -782,7 +781,7 @@ PostgresPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp,
 
 	pos = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
 
- 	if ( pos > (*stmt)->p_len || pos < 1) {
+ 	if ( pos > stmt->p_len || pos < 1) {
 		dlog(LOG_WARNING, "The position is incorrect!\n");
 		ret = JS_FALSE;
 		goto out;
@@ -790,25 +789,25 @@ PostgresPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp,
 
 	pos--;
 
-	if ((*stmt)->p_values[pos] != NULL) {
-		dlog(LOG_INFO, "The element from position %d was already set : %s.\n", pos + 1, (*stmt)->p_values[pos] );
-		free((*stmt)->p_values[pos]);
-		(*stmt)->p_values[pos] = NULL;
+	if (stmt->p_values[pos] != NULL) {
+		dlog(LOG_INFO, "The element from position %d was already set : %s.\n", pos + 1, stmt->p_values[pos] );
+		free(stmt->p_values[pos]);
+		stmt->p_values[pos] = NULL;
 	}
 
 	//if the parameter is NULL, let the value to remain NULL
 	if (argc < 2 || JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
-		(*stmt)->p_values[pos] = NULL;
+		stmt->p_values[pos] = NULL;
 	} else {
 		char *value = JSString_to_CString(cx, JS_ARGV(cx, vp)[1]);
-		(*stmt)->p_values[pos] = malloc (strlen(value) * sizeof(char));
-		if ((*stmt)->p_values[pos] == NULL) {
+		stmt->p_values[pos] = malloc (strlen(value) * sizeof(char));
+		if (stmt->p_values[pos] == NULL) {
 			dlog(LOG_WARNING, "Failed to allocate memory\n");
 			ret = JS_FALSE;
 			free(value);
 			goto out;
 		}
-		strcpy((*stmt)->p_values[pos], value);
+		strcpy(stmt->p_values[pos], value);
 		free(value);
 	}
 
@@ -829,12 +828,8 @@ out:
 static JSBool
 PostgresPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsval *vp)
 {
-	struct statement *stmt;
-	jsval this = JS_THIS(cx, vp);
 	jsval ret = JSVAL_TRUE;
 	
-	stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-
 	if (!JSVAL_IS_NUMBER(JS_ARGV(cx, vp)[1]) ||
 		JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
 		dlog(LOG_WARNING, "The value is not a number!\n");
@@ -842,7 +837,7 @@ PostgresPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsval *vp)
 		goto out;
 	}
 
-	ret = BOOLEAN_TO_JSVAL(PostgresPreparedStatement_set(cx, argc, vp, &stmt));
+	ret = BOOLEAN_TO_JSVAL(PostgresPreparedStatement_set(cx, argc, vp));
 
 out:
 	JS_SET_RVAL(cx, vp, ret);
@@ -861,12 +856,8 @@ out:
 static JSBool
 PostgresPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
 {
-	struct statement *stmt;
-	jsval this = JS_THIS(cx, vp);
 	jsval ret = JSVAL_TRUE;
 	
-	stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-
 	if (!JSVAL_IS_STRING(JS_ARGV(cx, vp)[1]) || 
 		JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
 		dlog(LOG_WARNING, "The value is not a string!\n");
@@ -874,7 +865,7 @@ PostgresPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
 		goto out;
 	}
 
-	ret = BOOLEAN_TO_JSVAL(PostgresPreparedStatement_set(cx, argc, vp, &stmt));
+	ret = BOOLEAN_TO_JSVAL(PostgresPreparedStatement_set(cx, argc, vp));
 
 out:
 	JS_SET_RVAL(cx, vp, ret);
