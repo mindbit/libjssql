@@ -213,13 +213,6 @@ PostgresResultSet_get(JSContext *cx, unsigned argc, jsval *vp)
 		goto out;
 	}
 
-	if (!JSVAL_IS_INT(JS_ARGV(cx, vp)[0])) {
-		dlog(LOG_WARNING, "The first parameter should be a number \
-			which represents the position of the parameter or a string (column label)\n");
-		ret = JS_FALSE;
-		goto out;
-	}
-
 	if (JSVAL_IS_INT(JS_ARGV(cx, vp)[0])) {
 		column_index = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
 
