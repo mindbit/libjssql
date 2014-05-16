@@ -32,6 +32,7 @@ struct statement {
 
 	// results
 	PGresult *result;
+	uint32_t row_index;
 };
 
 /**
@@ -51,6 +52,15 @@ static void pretty_printer(struct statement *stmt)
 		dlog(LOG_INFO, "%d argument: %s\n", i + 1, 
 			(stmt->p_values[i] == NULL)? "NULL":stmt->p_values[i]);		
 	}
+}
+
+/**
+ * result_pretty_printer - internal function used for debugging
+ * @stmt: pointer to the structure
+ */
+static void result_pretty_printer(struct statement *stmt)
+{
+	PQprint(stdout, stmt->result, NULL);
 }
 
 /**
@@ -138,6 +148,7 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd) {
 	char *nativeSQL = JSString_to_CString(cx, cmd);
 
 	stmt->p_len = get_plen(nativeSQL);
+	stmt->row_index = 0;
 	
 	/* it supports maximum 99 parameters */
 	if (stmt->p_len > MAX_PARAMETERS) {
@@ -172,6 +183,245 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd) {
 	return stmt;
 }
 
+/**
+ * PostgresResultSet_get - Retrieves the value of the designated column in the 
+ * current row of this ResultSet object as a String. (this is an internal function)
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns the number on success and JS_NULL on failure
+ */
+static inline JSBool
+PostgresResultSet_get(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	JSBool ret = JS_TRUE;
+	jsval rval = JSVAL_NULL;
+	int column_index;
+
+	if (stmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	if (argc != 1) {
+		dlog(LOG_WARNING, "Wrong number of arguments\n");
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	if (!JSVAL_IS_INT(JS_ARGV(cx, vp)[0])) {
+		dlog(LOG_WARNING, "The first parameter should be a number \
+			which represents the position of the parameter or a string (column label)\n");
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	if (JSVAL_IS_INT(JS_ARGV(cx, vp)[0])) {
+		column_index = JSVAL_TO_INT(JS_ARGV(cx, vp)[0]);
+
+		if (column_index < 1 || column_index > PQnfields(stmt->result)) {
+			dlog(LOG_WARNING, "Column index out of bounds\n");
+			ret = JS_FALSE;
+			goto out;
+		}
+
+		column_index--;
+
+		if (stmt->row_index < 0 || stmt->row_index >= PQntuples(stmt->result)) {
+			dlog(LOG_WARNING, "Row index out of bounds\n");
+			ret = JS_FALSE;
+			goto out;
+		}
+	} else if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[0])) {
+		char *column_name = JSString_to_CString(cx, JS_ARGV(cx, vp)[0]);
+		if (column_name == NULL) {
+			ret = JS_FALSE;
+			goto out;
+		}
+
+		column_index = PQfnumber(stmt->result, column_name);
+		if (column_index == -1) {
+			ret = JS_FALSE;
+			dlog(LOG_WARNING, "The given name does not match any column.");
+			goto out;
+		}
+	} else {
+		dlog(LOG_WARNING, "[Wrong argument type]The first parameter should be a number \
+		which represents the position of the parameter or a string (column label)\n");
+		ret = JS_FALSE;
+		goto out;
+	}
+
+	if (PQgetisnull(stmt->result, stmt->row_index, column_index)) {
+		ret = JS_FALSE;
+		//FIXME not sure if I should return a NULL/empty string
+		goto out;
+	}
+
+	char *value = PQgetvalue(stmt->result, stmt->row_index, column_index);
+	char *pEnd;
+	long value_to_double = strtol(value, &pEnd, 10);
+
+	//check if the value is a number
+	if (pEnd == '\0' || pEnd != value) {
+		rval = JS_NumberValue(value_to_double);
+	} else {
+		JSString *str = JS_NewStringCopyN(cx, value, strlen(value));	
+		if (str)
+			rval = STRING_TO_JSVAL(str);
+	}
+
+out:
+	JS_SET_RVAL(cx, vp, rval);
+	return ret;
+}
+
+/**
+ * PostgresResultSet_getNumber - Retrieves the value of the designated column in the 
+ * current row of this ResultSet object as a number.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns the number on success and JS_NULL on failure
+ */
+static JSBool PostgresResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
+{
+	if (!PostgresResultSet_get(cx, argc, vp))
+		return JS_TRUE;
+
+	if (!JSVAL_IS_NUMBER(*vp)) {
+		dlog(LOG_WARNING, "The result value from that position is not a number\n");
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	}
+
+	return JS_TRUE;
+}
+
+/**
+ * PostgresResultSet_getString - Retrieves the value of the designated column in the 
+ * current row of this ResultSet object as a String.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns the string on success and JS__NULL on failure
+ */
+static JSBool PostgresResultSet_getString(JSContext *cx, unsigned argc, jsval *vp)
+{
+	PostgresResultSet_get(cx, argc, vp);
+
+	return JS_TRUE;
+}
+
+/**
+ * PostgresResultSet_next - Moves the cursor froward one row from its current position.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
+static JSBool PostgresResultSet_next(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	jsval rval = JSVAL_TRUE;
+
+	if (stmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		rval = JSVAL_FALSE;
+		goto out;
+	}
+
+	if (argc != 0) {
+		dlog(LOG_WARNING, "Wrong number of arguments\n");
+		rval = JSVAL_FALSE;
+		goto out;
+	}
+
+	if (stmt->row_index < 0 || stmt->row_index >= PQntuples(stmt->result) - 1) {
+		dlog(LOG_INFO, "Row index out of bounds\n");
+		rval = JSVAL_FALSE;
+		goto out;
+	}
+
+	stmt->row_index += 1;
+
+out:
+	JS_SET_RVAL(cx, vp, rval);
+	return JS_TRUE;
+}
+
+/**
+ * PostgresResultSet_first - Moves the cursor to the first row in this ResultSet object.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
+static JSBool PostgresResultSet_first(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	jsval rval = JSVAL_TRUE;
+
+	if (stmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		rval = JSVAL_FALSE;
+		goto out;
+	}
+
+	if (argc != 0) {
+		dlog(LOG_WARNING, "Wrong number of arguments\n");
+		rval = JSVAL_FALSE;
+		goto out;
+	}
+
+	stmt->row_index = 0;
+
+out:
+	JS_SET_RVAL(cx, vp, rval);
+	return JS_TRUE;
+}
+
+/**
+ * PostgresResultSet_last - Moves the cursor to the last row in this ResultSet object.
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
+static JSBool PostgresResultSet_last(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	jsval rval = JSVAL_TRUE;
+
+	if (stmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		rval = JSVAL_FALSE;
+		goto out;
+	}
+
+	if (argc != 0) {
+		dlog(LOG_WARNING, "Wrong number of arguments\n");
+		rval = JSVAL_FALSE;
+		goto out;
+	}
+
+	stmt->row_index = PQntuples(stmt->result) - 1;
+
+out:
+	JS_SET_RVAL(cx, vp, rval);
+	return JS_TRUE;
+}
 
 static JSClass PostgresResultSet_class = {
 	"PostgresResultSet",   //name of the class
@@ -187,6 +437,11 @@ static JSClass PostgresResultSet_class = {
 };
 
 static JSFunctionSpec PostgresResultSet_functions[] = {
+	JS_FS("getNumber", PostgresResultSet_getNumber, 1, 0),
+	JS_FS("getString", PostgresResultSet_getString, 1, 0),
+	JS_FS("next", PostgresResultSet_next, 0, 0),
+	JS_FS("first", PostgresResultSet_first, 0, 0),
+	JS_FS("last", PostgresResultSet_last, 0, 0),
 	JS_FS_END
 };
 
@@ -642,6 +897,16 @@ out:
 static JSBool
 PostgresPreparedStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
 {
+	/*
+	 //OPTION 1
+	 	step 1 : concatenate returning id to insert statements
+	 		Example: "insert into yourtable(col1,col2,col3,...) values ($1,$2,$3,...) returning id"
+		step 2 treat the PGresult as though I just done a select statement
+			(I should use the name of the actual id column in the returning clause)
+	
+	 //OPTION 2
+	 	select currval(sequence)
+	*/
 	return JS_TRUE;
 }
 
