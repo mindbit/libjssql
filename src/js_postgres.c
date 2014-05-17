@@ -70,15 +70,23 @@ static void result_pretty_printer(struct statement *stmt)
 static void clear_statement(struct statement *stmt)
 {
 	free(stmt->command);
+	stmt->command = NULL;
 	if(stmt->type == PREPARED_STATEMENT) {
 		int i;
-		for (i = 0; i < stmt->p_len; i++)
+		for (i = 0; i < stmt->p_len; i++) {
 			free(stmt->p_values[i]);
+			stmt->p_values[i] = NULL;
+		}
 		free(stmt->p_values);
+		stmt->p_values = NULL;
 	}
 	
 	PQclear(stmt->result);
-	free(stmt);
+	stmt->result = NULL;
+	
+/*	free(stmt);
+	stmt = NULL;*/
+
 }
 
 /**
@@ -153,6 +161,7 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd) {
 	/* it supports maximum 99 parameters */
 	if (stmt->p_len > MAX_PARAMETERS) {
 		free(stmt);
+		stmt = NULL;
 		return NULL;
 	}
 
@@ -160,6 +169,7 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd) {
 							sizeof(char));
 	if (stmt->command == NULL) {
 		free(stmt);
+		stmt = NULL;
 		dlog(LOG_ALERT, "Failed to allocate memory for statement command\n");
 		return NULL;
 	}
@@ -169,7 +179,9 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd) {
 		stmt->p_values = calloc(stmt->p_len, sizeof(char *));
 		if (stmt->p_values == NULL) {
 			free(stmt->command);
+			stmt->command = NULL;
 			free(stmt);
+			stmt = NULL;
 			dlog(LOG_ALERT, "Failed to allocate memory for statement values\n");
 			return NULL;
 		}
@@ -416,6 +428,20 @@ out:
 	return JS_TRUE;
 }
 
+/**
+ * PostgresResultSet_finalize - cleanup function for ResultSet objects
+ * @cx: JavaScript context
+ * @obj: object
+ */
+static void PostgresResultSet_finalize(JSContext *cx, JSObject *obj) {
+	struct statement *stmt = (struct statement *)JS_GetPrivate(obj);
+
+	if (stmt != NULL && stmt->result != NULL) {
+		PQclear(stmt->result);
+		stmt->result = NULL;
+	}
+}
+
 static JSClass PostgresResultSet_class = {
 	"PostgresResultSet",   //name of the class
 	JSCLASS_HAS_PRIVATE,    //flags
@@ -426,7 +452,7 @@ static JSClass PostgresResultSet_class = {
 	JS_EnumerateStub,       //enumerate (default)
 	JS_ResolveStub,         //resolve -lazy properties(default)
 	JS_ConvertStub,         //conversion to primitive value (default)
-	NULL, 					//optional members
+	PostgresResultSet_finalize,		//cleanup
 };
 
 static JSFunctionSpec PostgresResultSet_functions[] = {
@@ -523,10 +549,22 @@ Postgres_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 
 	stmt->conn = (PGconn *)JS_GetPrivate(JSVAL_TO_OBJECT(conn));
 	if (PQstatus(stmt->conn) != CONNECTION_OK) {
+		int i;
 		dlog(LOG_ALERT, "Wrong connection status %s\n", PQerrorMessage(stmt->conn));
+		
 		free(stmt->command);
+		stmt->command = NULL;
+		
+		for (i = 0; i < stmt->p_len; i++) {
+			free(stmt->p_values[i]);
+			stmt->p_values[i] = NULL;
+		}		
 		free(stmt->p_values);
+		stmt->p_values = NULL;
+		
 		free(stmt);
+		stmt = NULL;
+		
 		ret = JS_FALSE;
 		goto out;
 	}
@@ -614,7 +652,7 @@ static JSBool PostgresStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
 
 	ret = execute_statement(cx, argc, vp, stmt);
 	if (stmt->type == SIMPLE_STATEMENT)
-		clear_statement(stmt);
+		clear_statement(stmt);	//FIXME not needed anymore? (if we have getResultSet, getGeneratedKeys..)
 
 out:
 	JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(ret));
@@ -699,7 +737,7 @@ PostgresStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
 
 	rval = JS_NumberValue(atoi(PQcmdTuples(stmt->result)));	
 	if(stmt->type == SIMPLE_STATEMENT)
-		clear_statement(stmt);
+		clear_statement(stmt);	//FIXME
 
 out:
 	JS_SET_RVAL(cx, vp, rval);
@@ -721,6 +759,18 @@ PostgresStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
 	return getConnection(cx, vp);
 }
 
+/**
+ * PostgresStatement_finalize - cleanup function for Statement objects
+ * @cx: JavaScript context
+ * @obj: object
+ */
+static void PostgresStatement_finalize(JSContext *cx, JSObject *obj) {
+	struct statement *stmt = (struct statement *)JS_GetPrivate(obj);
+
+	if (stmt != NULL)
+		clear_statement(stmt);
+}
+
 static JSFunctionSpec PostgresStatement_functions[] = {
 	JS_FS("execute", PostgresStatement_execute, 1, 0),
 	JS_FS("executeQuery", PostgresStatement_executeQuery, 1, 0),
@@ -739,7 +789,7 @@ static JSClass PostgresStatement_class = {
 	JS_EnumerateStub,       //enumerate (default)
 	JS_ResolveStub,         //resolve -lazy properties(default)
 	JS_ConvertStub,         //conversion to primitive value (default)
-	NULL, 					//optional members
+	PostgresStatement_finalize,	//cleanup
 };
 
 
@@ -969,7 +1019,7 @@ static JSClass PostgresPreparedStatement_class = {
 	JS_EnumerateStub,       		//enumerate (default)
 	JS_ResolveStub,         		//resolve -lazy properties(default)
 	JS_ConvertStub,         		//conversion to primitive value (default)
-	NULL, 							//optional members
+	PostgresStatement_finalize,		//cleanup
 };
 
 /**
@@ -1043,6 +1093,18 @@ PostgresConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
 	return nativeSQL(cx, argc, vp);
 }
 
+/**
+ * PostgresConnection_finalize - cleanup function for Connection objects
+ * @cx: JavaScript context
+ * @obj: object
+ */
+static void PostgresConnection_finalize(JSContext *cx, JSObject *obj) {
+	PGconn *conn = (PGconn *)JS_GetPrivate(obj);
+
+	if (conn != NULL)
+		PQfinish(conn);
+}
+
 static JSFunctionSpec PostgresConnection_functions[] = {
 	JS_FS("createStatement", PostgresConnection_createStatement, 0, 0),
 	JS_FS("prepareStatement", PostgresConnection_prepareStatement, 1, 0),
@@ -1051,16 +1113,16 @@ static JSFunctionSpec PostgresConnection_functions[] = {
 };
 
 static JSClass PostgresConnection_class = {
-	"PostgresConnection",   //name of the class
-	JSCLASS_HAS_PRIVATE,    //flags
-	JS_PropertyStub,        //addProperty (default value JS_PropertyStrub)
-	JS_PropertyStub,        //delProperty (default)
-	JS_PropertyStub,        //getProperty (default)
-	JS_StrictPropertyStub,  //setProperty (default value JS_StrictPropertyStub)
-	JS_EnumerateStub,       //enumerate (default)
-	JS_ResolveStub,         //resolve -lazy properties(default)
-	JS_ConvertStub,         //conversion to primitive value (default)
-	NULL, 					//optional members
+	"PostgresConnection",   	//name of the class
+	JSCLASS_HAS_PRIVATE,    	//flags
+	JS_PropertyStub,        	//addProperty (default value JS_PropertyStrub)
+	JS_PropertyStub,        	//delProperty (default)
+	JS_PropertyStub,        	//getProperty (default)
+	JS_StrictPropertyStub,  	//setProperty (default value JS_StrictPropertyStub)
+	JS_EnumerateStub,       	//enumerate (default)
+	JS_ResolveStub,         	//resolve -lazy properties(default)
+	JS_ConvertStub,         	//conversion to primitive value (default)
+	PostgresConnection_finalize,//cleanup
 };
 
 /**
