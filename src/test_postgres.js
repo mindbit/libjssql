@@ -66,7 +66,7 @@ function executeUpdate_test() {
 	if (stmt == null)
 		return "FAIL";
 	
-	ret = stmt.executeUpdate("BEGIN");
+	ret = stmt.executeUpdate("update students set age = 21 where name = 'Mihai'");
 	if (ret == -1)
 		return "FAIL";
 	else
@@ -171,14 +171,14 @@ function preparedStatement_executeUpdate_test() {
 	if (conn == null)
 		return "FAIL";
 
-	stmt = conn.prepareStatement("select * from information_schema.tables where table_name = ? and table_type = ?");
+	stmt = conn.prepareStatement("update students set age = ? where name = ?");
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(2, 99) == false)
+	if (stmt.setNumber(1, 99) == false)
 		return "FAIL";
 
-	if (stmt.setString(1, "Test") == false)
+	if (stmt.setString(2, "Mihai") == false)
 		return "FAIL";
 	
 	if (stmt.executeUpdate() == -1)
@@ -227,6 +227,52 @@ function compareTwoObjects(x, y) {
 	return true;
 }
 
+function getGeneratedKeys_test() {
+	return "PASS";
+}
+
+function getResultSet_test() {
+	var conn, stmt;
+
+	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (conn == null)
+		return "FAIL";
+
+	stmt = conn.createStatement();
+	if (stmt == null)
+		return "FAIL";
+
+	result = stmt.executeQuery("select * from students");	
+	if (result == null)
+		return "FAIL";
+
+	if (compareTwoObjects(result, stmt.getResultSet()) == false)
+		return "FAIL";
+
+	return "PASS";
+}
+
+function getUpdateCount_test() {
+	var conn, stmt;
+
+	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (conn == null)
+		return "FAIL";
+
+	stmt = conn.createStatement();
+	if (stmt == null)
+		return "FAIL";
+	
+	result = stmt.executeUpdate("update students set age = 24 where name = 'Mihai'");
+	if (result == -1)
+		return "FAIL";
+
+	if (result != stmt.getUpdateCount())
+		return "FAIL";
+
+	return "PASS";
+}
+
 function preparedStatement_getGeneratedKeys_test() {
 	return "PASS";
 }
@@ -265,14 +311,14 @@ function preparedStatement_getUpdateCount_test() {
 	if (conn == null)
 		return "FAIL";
 
-	stmt = conn.prepareStatement("select * from information_schema.tables where table_name = ? and table_type = ?");
+	stmt = conn.prepareStatement("update students set age = ? where name = ?");
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(2, 99) == false)
+	if (stmt.setNumber(1, 12) == false)
 		return "FAIL";
 
-	if (stmt.setString(1, "Test") == false)
+	if (stmt.setString(2, "Mihai") == false)
 		return "FAIL";
 	
 	result = stmt.executeUpdate();
@@ -402,11 +448,14 @@ function foo() {
 	println("[Test  8] Testing execute for prepared statement ..................... " + preparedStatement_execute_test());
 	println("[Test  9] Testing executeQuery for prepared statement ................ " + preparedStatement_executeQuery_test());
 	println("[Test 10] Testing executeUpdate for prepared statement ............... " + preparedStatement_executeUpdate_test());
-	println("[Test 11] Testing getGeneratedKeys for prepared statement ............ " + preparedStatement_getGeneratedKeys_test());
-	println("[Test 12] Testing getResultSet for prepared statement ................ " + preparedStatement_getResultSet_test());
-	println("[Test 13] Testing getUpdateCount for prepared statement .............. " + preparedStatement_getUpdateCount_test());
-	println("[Test 14] Testing ResultSet for a simple statement  .................. " + simpleStatementResult_test());
-	println("[Test 15] Testing ResultSet for a prepared statement  ................ " + preparedStatementResult_test());
+	println("[Test 11] Testing getGeneratedKeys for simple statement .............. " + getGeneratedKeys_test());
+	println("[Test 12] Testing getResultSet for simple statement .................. " + getResultSet_test());
+	println("[Test 13] Testing getUpdateCount for simple statement ................ " + getUpdateCount_test());
+	println("[Test 14] Testing getGeneratedKeys for prepared statement ............ " + preparedStatement_getGeneratedKeys_test());
+	println("[Test 15] Testing getResultSet for prepared statement ................ " + preparedStatement_getResultSet_test());
+	println("[Test 16] Testing getUpdateCount for prepared statement .............. " + preparedStatement_getUpdateCount_test());
+	println("[Test 17] Testing ResultSet for a simple statement  .................. " + simpleStatementResult_test());
+	println("[Test 18] Testing ResultSet for a prepared statement  ................ " + preparedStatementResult_test());
 
 	//TODO add more complex tests (example: create a table, insert an element, get the result and check if it is the one expected)
 	return 0;
