@@ -73,7 +73,7 @@ function executeUpdate_test() {
 		return "PASS";
 }
 
-function prepareStatement_test() {
+function preparedStatement_test() {
 	var conn, stmt;
 
 	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
@@ -87,7 +87,7 @@ function prepareStatement_test() {
 		return "PASS";
 }
 
-function prepareStatement_set_test() {
+function preparedStatement_set_test() {
 	var conn, stmt;
 
 	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
@@ -117,7 +117,7 @@ function prepareStatement_set_test() {
 	return "PASS";
 }
 
-function prepareStatement_execute_test() {
+function preparedStatement_execute_test() {
 	var conn, stmt;
 
 	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
@@ -140,7 +140,7 @@ function prepareStatement_execute_test() {
 	 	return "PASS";
 }
 
-function prepareStatement_executeQuery_test() {
+function preparedStatement_executeQuery_test() {
 	var conn, stmt;
 
 	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
@@ -164,7 +164,7 @@ function prepareStatement_executeQuery_test() {
 	 	return "PASS";
 }
 
-function prepareStatement_executeUpdate_test() {
+function preparedStatement_executeUpdate_test() {
 	var conn, stmt;
 
 	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
@@ -227,11 +227,11 @@ function compareTwoObjects(x, y) {
 	return true;
 }
 
-function prepareStatement_getGeneratedKeys_test() {
+function preparedStatement_getGeneratedKeys_test() {
 	return "PASS";
 }
 
-function prepareStatement_getResultSet_test() {
+function preparedStatement_getResultSet_test() {
 	var conn, stmt;
 
 	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
@@ -258,7 +258,7 @@ function prepareStatement_getResultSet_test() {
 	return "PASS";
 }
 
-function prepareStatement_getUpdateCount_test() {
+function preparedStatement_getUpdateCount_test() {
 	var conn, stmt;
 
 	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
@@ -284,21 +284,131 @@ function prepareStatement_getUpdateCount_test() {
 	return "PASS";
 }
 
+function simpleStatementResult_test() {
+	var conn, stmt;
+
+	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (conn == null)
+		return "FAIL";
+	
+	stmt = conn.createStatement();
+	if(stmt == null)
+		return "FAIL";
+
+	result = stmt.executeQuery("select * from students");
+	if (result == null)
+		return "FAIL";
+
+	//check last() method
+	if (!result.last() || result.next())
+		return "FAIL";
+
+	//check first() method
+	if (!result.first())
+		return "FAIL";
+
+	//sanity checks (expected a number on position 1, a string on position 2 and another number on position 3)
+	do {
+		if (result.getString(1) == null ||
+			result.getNumber(2) != null ||
+			result.getString(3) == null)
+			return "FAIL";
+	} while(result.next())
+
+	result.first();
+
+	//check with column index
+	do {
+		print("Id: ");
+		print(result.getNumber(1));
+		print(" | Name: ")
+		print(result.getString(2));
+		print(" | Age: ");
+		println(result.getNumber(3));
+	} while(result.next())
+
+	//check with column label
+	result.first();
+	do {
+		print("Id: ");
+		print(result.getNumber("id"));
+		print(" | Name: ")
+		print(result.getString("name"));
+		print(" | Age: ");
+		println(result.getNumber("age"));
+	} while(result.next())
+
+	return "PASS";
+}
+
+function preparedStatementResult_test() {
+	var conn, stmt, age, name;
+	var studentName = "Cristina";
+
+	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (conn == null)
+		return "FAIL";
+
+	// check for a number
+	stmt = conn.prepareStatement("select age from students where name = ?");
+	if (stmt == null)
+		return "FAIL";
+	if (stmt.setString(1, studentName) == false)
+		return "FAIL";
+	
+	result = stmt.executeQuery();
+	if (result == null)
+		return "FAIL";
+	
+	age = result.getNumber(1);	//use column index
+	if (age == null)
+		return "FAIL";
+
+	//check for a string
+	stmt = conn.prepareStatement("select name from students where age = ?");
+	if (stmt == null)
+		return "FAIL";
+
+	if (stmt.setNumber(1, age) == false)
+		return "FAIL";
+
+	result = stmt.executeQuery();
+	if (result == null)
+		return "FAIL";
+
+	name = result.getString(1);
+	if (age == null)
+		return "FAIL";
+
+	do {
+		name = result.getString("name"); //use column label
+		if (name == null)
+			return "FAIL";
+		if (name.localeCompare(studentName) == 0)
+			return "PASS";
+	} while(result.next())
+	
+	return "FAIL";
+}
+
 function foo() {
 	println("[Test  1] Testing connection ......................................... " + connection_test());
 	println("[Test  2] Testing createStatement .................................... " + createStatement_test());
 	println("[Test  3] Testing execute for simple statement ....................... " + execute_test());
 	println("[Test  4] Testing executeQuery for simple statement .................. " + executeQuery_test());
 	println("[Test  5] Testing executeUpdate for simple statement ................. " + executeUpdate_test());
-	println("[Test  6] Testing prepareStatement ................................... " + prepareStatement_test());
-	println("[Test  7] Testing set functions for prepared statement ............... " + prepareStatement_set_test());
-	println("[Test  8] Testing execute for prepared statement ..................... " + prepareStatement_execute_test());
-	println("[Test  9] Testing executeQuery for prepared statement ................ " + prepareStatement_executeQuery_test());
-	println("[Test 10] Testing executeUpdate for prepared statement ............... " + prepareStatement_executeUpdate_test());
-	println("[Test 11] Testing getGeneratedKeys for prepared statement ............ " + prepareStatement_getGeneratedKeys_test());
-	println("[Test 12] Testing getResultSet for prepared statement ................ " + prepareStatement_getResultSet_test());
-	println("[Test 13] Testing getUpdateCount for prepared statement .............. " + prepareStatement_getUpdateCount_test());
+	println("[Test  6] Testing prepareStatement ................................... " + preparedStatement_test());
+	println("[Test  7] Testing set functions for prepared statement ............... " + preparedStatement_set_test());
+	println("[Test  8] Testing execute for prepared statement ..................... " + preparedStatement_execute_test());
+	println("[Test  9] Testing executeQuery for prepared statement ................ " + preparedStatement_executeQuery_test());
+	println("[Test 10] Testing executeUpdate for prepared statement ............... " + preparedStatement_executeUpdate_test());
+	println("[Test 11] Testing getGeneratedKeys for prepared statement ............ " + preparedStatement_getGeneratedKeys_test());
+	println("[Test 12] Testing getResultSet for prepared statement ................ " + preparedStatement_getResultSet_test());
+	println("[Test 13] Testing getUpdateCount for prepared statement .............. " + preparedStatement_getUpdateCount_test());
+	println("[Test 14] Testing ResultSet for a simple statement  .................. " + simpleStatementResult_test());
+	println("[Test 15] Testing ResultSet for a prepared statement  ................ " + preparedStatementResult_test());
 
+	//TODO add more complex tests (example: create a table, insert an element, get the result and check if it is the one expected)
 	return 0;
 }
 
