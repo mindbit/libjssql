@@ -71,6 +71,7 @@ static void clear_statement(struct statement *stmt)
 {
 	free(stmt->command);
 	stmt->command = NULL;
+	
 	if(stmt->type == PREPARED_STATEMENT) {
 		int i;
 		for (i = 0; i < stmt->p_len; i++) {
@@ -81,12 +82,8 @@ static void clear_statement(struct statement *stmt)
 		stmt->p_values = NULL;
 	}
 	
-	PQclear(stmt->result);
-	stmt->result = NULL;
-	
-/*	free(stmt);
-	stmt = NULL;*/
-
+	// free(stmt);
+	// stmt = NULL;
 }
 
 /**
@@ -165,7 +162,7 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd) {
 		return NULL;
 	}
 
-	stmt->command = malloc((strlen(nativeSQL) + stmt->p_len + stmt->p_len / 10) *
+	stmt->command = malloc((strlen(nativeSQL) + stmt->p_len + stmt->p_len / 10 + 1) *
 							sizeof(char));
 	if (stmt->command == NULL) {
 		free(stmt);
@@ -191,7 +188,6 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd) {
 		strcpy(stmt->command, nativeSQL);
 		stmt->p_values = NULL;
 	}
-
 	return stmt;
 }
 
@@ -436,7 +432,7 @@ out:
 static void PostgresResultSet_finalize(JSContext *cx, JSObject *obj) {
 	struct statement *stmt = (struct statement *)JS_GetPrivate(obj);
 
-	if (stmt != NULL && stmt->result != NULL) {
+	if (stmt && stmt->result) {
 		PQclear(stmt->result);
 		stmt->result = NULL;
 	}
