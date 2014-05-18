@@ -71,7 +71,7 @@ static void clear_statement(struct statement *stmt)
 {
 	free(stmt->command);
 	stmt->command = NULL;
-	
+
 	if(stmt->type == PREPARED_STATEMENT) {
 		int i;
 		for (i = 0; i < stmt->p_len; i++) {
@@ -756,6 +756,80 @@ PostgresStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
 }
 
 /**
+ * PostgresStatement_getGeneratedKeys - Returns the generated keys
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ */
+static JSBool
+PostgresStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
+{
+	/*
+	 //OPTION 1
+	 	step 1 : concatenate returning id to insert statements
+	 		Example: "insert into yourtable(col1,col2,col3,...) values ($1,$2,$3,...) returning id"
+		step 2 treat the PGresult as though I just done a select statement
+			(I should use the name of the actual id column in the returning clause)
+	
+	 //OPTION 2
+	 	select currval(sequence)
+	*/
+	return JS_TRUE;
+}
+
+/**
+ * PostgresStatement_getResultSet - Returns the result set
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ */
+static JSBool
+PostgresStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval this = JS_THIS(cx, vp);
+
+	struct statement *stmt = 
+		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (stmt == NULL)
+		goto out;
+
+	if (statement_get_result_set(cx, stmt, &JS_RVAL(cx, vp)) == JS_FALSE)
+		goto out;
+
+	return JS_TRUE;
+
+out:
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	return JS_TRUE;
+}
+
+/**
+ * PostgresStatement_getUpdateCount - Returns the number of updated rows
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: arguments' values
+ */
+static JSBool
+PostgresStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
+{
+	jsval rval = JS_NumberValue(-1);
+	jsval this = JS_THIS(cx, vp);
+
+	struct statement *stmt = 
+		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (stmt == NULL || stmt->result == NULL)
+		goto out;
+
+	rval = JS_NumberValue(atoi(PQcmdTuples(stmt->result)));	
+	
+out:
+	JS_SET_RVAL(cx, vp, rval);
+	return JS_TRUE;
+}
+
+/**
  * PostgresStatement_finalize - cleanup function for Statement objects
  * @cx: JavaScript context
  * @obj: object
@@ -772,6 +846,9 @@ static JSFunctionSpec PostgresStatement_functions[] = {
 	JS_FS("executeQuery", PostgresStatement_executeQuery, 1, 0),
 	JS_FS("executeUpdate", PostgresStatement_executeUpdate, 1, 0),
 	JS_FS("getConnection", PostgresStatement_getConnection, 1, 0),
+	JS_FS("getGeneratedKeys", PostgresStatement_getGeneratedKeys, 0, 0),
+	JS_FS("getResultSet", PostgresStatement_getResultSet, 0, 0),
+	JS_FS("getUpdateCount", PostgresStatement_getUpdateCount, 0, 0),
 	JS_FS_END
 };
 
@@ -918,88 +995,14 @@ out:
 	return JS_TRUE;
 }
 
-/**
- * PostgresPreparedStatement_getGeneratedKeys - Returns the generated keys
- * @cx: JavaScript context
- * @argc: arguments' number
- * @vp: arguments' values
- */
-static JSBool
-PostgresPreparedStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
-{
-	/*
-	 //OPTION 1
-	 	step 1 : concatenate returning id to insert statements
-	 		Example: "insert into yourtable(col1,col2,col3,...) values ($1,$2,$3,...) returning id"
-		step 2 treat the PGresult as though I just done a select statement
-			(I should use the name of the actual id column in the returning clause)
-	
-	 //OPTION 2
-	 	select currval(sequence)
-	*/
-	return JS_TRUE;
-}
-
-/**
- * PostgresPreparedStatement_getResultSet - Returns the result set
- * @cx: JavaScript context
- * @argc: arguments' number
- * @vp: arguments' values
- */
-static JSBool
-PostgresPreparedStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
-{
-	jsval this = JS_THIS(cx, vp);
-
-	struct statement *stmt = 
-		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-
-	if (stmt == NULL)
-		goto out;
-
-	if (statement_get_result_set(cx, stmt, &JS_RVAL(cx, vp)) == JS_FALSE)
-		goto out;
-
-	return JS_TRUE;
-
-out:
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-	return JS_TRUE;
-}
-
-/**
- * PostgresPreparedStatement_getUpdateCount - Returns the number of updated rows
- * @cx: JavaScript context
- * @argc: arguments' number
- * @vp: arguments' values
- */
-static JSBool
-PostgresPreparedStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
-{
-	jsval rval = JS_NumberValue(-1);
-	jsval this = JS_THIS(cx, vp);
-
-	struct statement *stmt = 
-		(struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-
-	if (stmt == NULL || stmt->result == NULL)
-		goto out;
-
-	rval = JS_NumberValue(atoi(PQcmdTuples(stmt->result)));	
-	
-out:
-	JS_SET_RVAL(cx, vp, rval);
-	return JS_TRUE;
-}
-
 static JSFunctionSpec PostgresPreparedStatement_functions[] = {
 	JS_FS("execute", PostgresStatement_execute, 0, 0),
 	JS_FS("executeQuery", PostgresStatement_executeQuery, 0, 0),
 	JS_FS("executeUpdate", PostgresStatement_executeUpdate, 0, 0),
 	JS_FS("getConnection", PostgresStatement_getConnection, 1, 0),
-	JS_FS("getGeneratedKeys", PostgresPreparedStatement_getGeneratedKeys, 0, 0),
-	JS_FS("getResultSet", PostgresPreparedStatement_getResultSet, 0, 0),
-	JS_FS("getUpdateCount", PostgresPreparedStatement_getUpdateCount, 0, 0),
+	JS_FS("getGeneratedKeys", PostgresStatement_getGeneratedKeys, 0, 0),
+	JS_FS("getResultSet", PostgresStatement_getResultSet, 0, 0),
+	JS_FS("getUpdateCount", PostgresStatement_getUpdateCount, 0, 0),
 	JS_FS("setNumber", PostgresPreparedStatement_setNumber, 2, 0),
 	JS_FS("setString", PostgresPreparedStatement_setString, 2, 0),
 	JS_FS_END
