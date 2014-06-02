@@ -228,6 +228,43 @@ function compareTwoObjects(x, y) {
 }
 
 function getGeneratedKeys_test() {
+	var conn, stmt, rs;
+
+	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (conn == null)
+		return "FAIL";
+
+	stmt = conn.createStatement();
+	if (stmt == null)
+		return "FAIL";
+	
+	/* sanity checks*/
+	i = stmt.executeUpdate("insert into students (name, age) values ('Test1',13)", false);
+	if (i == -1)
+		return "FAIL";
+	rs = stmt.getGeneratedKeys();
+	if (rs != null)
+		return "FAIL";
+
+	i = stmt.executeUpdate("insert into students (name, age) values ('Test2',133)");
+	if (i == -1)
+		return "FAIL";
+	rs = stmt.getGeneratedKeys();
+	if (rs != null)
+		return "FAIL";
+
+	/* the correct call */
+	i = stmt.executeUpdate("insert into students (name, age) values ('Test1',13)", 1);
+	if (i == -1)
+		return "FAIL";
+	rs = stmt.getGeneratedKeys();
+	if (rs == null)
+		return "FAIL";
+
+	while(rs.next())
+		println("GeneratedKeys: ID ", rs.getNumber(1));
+
+	return "PASS";
 	return "PASS";
 }
 
@@ -318,6 +355,33 @@ function preparedStatement_getConnection_test() {
 }
 
 function preparedStatement_getGeneratedKeys_test() {
+	var conn, stmt, rs;
+
+	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (conn == null)
+		return "FAIL";
+
+	stmt = conn.prepareStatement("insert into students (age, name) values (?,?)", true);
+	if (stmt == null)
+		return "FAIL";
+
+	if (stmt.setNumber(1, 13) == false)
+	 	return "FAIL";
+
+	if (stmt.setString(2, "Test21") == false)
+		return "FAIL";
+	
+	i = stmt.executeUpdate();
+	if (i == -1)
+		return "FAIL";
+
+	rs = stmt.getGeneratedKeys();
+	if (rs == null)
+		return "FAIL";
+
+	while(rs.next())
+		println("GeneratedKeys: ", rs.getNumber(1));
+
 	return "PASS";
 }
 
@@ -398,35 +462,35 @@ function simpleStatementResult_test() {
 		return "FAIL";
 
 	//sanity checks (expected a number on position 1, a string on position 2 and another number on position 3)
-	do {
+	while(result.next()) {
 		if (result.getString(1) == null ||
 			result.getNumber(2) != null ||
 			result.getString(3) == null)
 			return "FAIL";
-	} while(result.next())
+	} 
 
 	result.first();
 
 	//check with column index
-	do {
+	while (result.next()) {
 		print("Id: ");
 		print(result.getNumber(1));
 		print(" | Name: ")
 		print(result.getString(2));
 		print(" | Age: ");
 		println(result.getNumber(3));
-	} while(result.next())
+	} 
 
 	//check with column label
 	result.first();
-	do {
+	while (result.next()) {
 		print("Id: ");
 		print(result.getNumber("id"));
 		print(" | Name: ")
 		print(result.getString("name"));
 		print(" | Age: ");
 		println(result.getNumber("age"));
-	} while(result.next())
+	}
 
 	return "PASS";
 }
@@ -449,6 +513,9 @@ function preparedStatementResult_test() {
 	result = stmt.executeQuery();
 	if (result == null)
 		return "FAIL";
+
+	if (result.next() == false)
+		return "FAIL";
 	
 	age = result.getNumber(1);	//use column index
 	if (age == null)
@@ -470,13 +537,13 @@ function preparedStatementResult_test() {
 	if (age == null)
 		return "FAIL";
 
-	do {
+	while(result.next()) {
 		name = result.getString("name"); //use column label
 		if (name == null)
 			return "FAIL";
 		if (name.localeCompare(studentName) == 0)
 			return "PASS";
-	} while(result.next())
+	} 
 	
 	return "FAIL";
 }
