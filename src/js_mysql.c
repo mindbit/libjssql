@@ -103,7 +103,12 @@ static JSBool MysqlGeneratedKeys_getNumber(JSContext *cx, unsigned argc, jsval *
 {
 	jsval this = JS_THIS(cx, vp);
 	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	JS_SET_RVAL(cx, vp, JS_NumberValue((double)k->last_insert_id));
+	
+	if (k)
+		JS_SET_RVAL(cx, vp, JS_NumberValue((double)k->last_insert_id));
+	else
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+
 	return JS_TRUE;
 }
 
@@ -112,6 +117,9 @@ static JSBool MysqlGeneratedKeys_getString(JSContext *cx, unsigned argc, jsval *
 	jsval this = JS_THIS(cx, vp);
 	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 	char *cstr;
+
+	if (k == NULL)
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
 
 	if (asprintf(&cstr, "%ju", (uintmax_t)k->last_insert_id) == -1)
 		return JS_FALSE;
@@ -125,6 +133,9 @@ static JSBool MysqlGeneratedKeys_next(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (k == NULL)
+		JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 
 	if (k->cursor < 1) {
 		k->cursor++;
@@ -189,6 +200,9 @@ static inline JSBool MysqlPreparedResultSet_get(JSContext *cx, unsigned argc, js
 	jsval this = JS_THIS(cx, vp);
 	*pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 	*result = JS_FALSE;
+
+	if (pstmt == NULL)
+		goto out_false;
 
 	if (argc < 1)
 		goto out_false;
@@ -273,11 +287,13 @@ static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsv
 	 * This is well documented in jsapi.h, just before the
 	 * prototype for JS_EncodeCharacters().
 	 */
-	JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[i], NULL, &jslen); // FIXME check return value
+	if (JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[i], NULL, &jslen) == JS_FALSE)
+		return JS_FALSE;
 	jschar *jsbuf = JS_malloc(cx, (jslen + 1) * sizeof(jschar));
 	assert(jsbuf);
 
-	JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[i], jsbuf, &jslen); // FIXME check return value
+	if (JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[i], jsbuf, &jslen) == JS_FALSE)
+		return JS_FALSE;
 	free(cbuf);
 
 	/* Add a null terminator, or we get an assertion failure if mozjs
@@ -296,6 +312,10 @@ static JSBool MysqlPreparedResultSet_next(JSContext *cx, unsigned argc, jsval *v
 {
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	if (pstmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		return JS_FALSE;
+	}
 
 	switch (mysql_stmt_fetch(pstmt->stmt)) {
 	case 0:
@@ -376,11 +396,26 @@ static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statemen
 
 static JSBool prepared_statement_get_result_set(JSContext *cx, struct prepared_statement *pstmt, jsval *rval)
 {
+	*rval = JSVAL_NULL;
+
 	JSObject *robj = JS_NewObject(cx, &MysqlPreparedResultSet_class, NULL, NULL);
+	if (robj == NULL) {
+		JS_ReportError(cx, "Failed to create a new object\n");
+		dlog(LOG_ALERT, "Failed to create a new object\n");
+		goto out;
+	}
+
 	JS_SetPrivate(robj, pstmt);
-	JS_DefineFunctions(cx, robj, MysqlPreparedResultSet_functions);
+
+	if (JS_DefineFunctions(cx, robj, MysqlPreparedResultSet_functions) == JS_FALSE) {
+		JS_ReportError(cx, "Failed to define functions\n");
+		dlog(LOG_ALERT, "Failed to define functions\n");
+		goto out;
+	}
 
 	*rval = OBJECT_TO_JSVAL(robj);
+	
+out:
 	return JS_TRUE;
 }
 
@@ -388,6 +423,11 @@ static JSBool MysqlPreparedStatement_execute(JSContext *cx, unsigned argc, jsval
 {
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (pstmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		return JS_FALSE;
+	}
 
 	if (!prepared_statement_execute(cx, pstmt))
 		return JS_FALSE;
@@ -401,6 +441,11 @@ static JSBool MysqlPreparedStatement_executeQuery(JSContext *cx, unsigned argc, 
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 
+	if (pstmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		return JS_FALSE;
+	}
+
 	if (!prepared_statement_execute(cx, pstmt))
 		return JS_FALSE;
 
@@ -413,6 +458,11 @@ static JSBool MysqlPreparedStatement_executeUpdate(JSContext *cx, unsigned argc,
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 
+	if (pstmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		return JS_FALSE;
+	}
+
 	if (!prepared_statement_execute(cx, pstmt))
 		return JS_FALSE;
 
@@ -424,7 +474,13 @@ static JSBool MysqlPreparedStatement_executeUpdate(JSContext *cx, unsigned argc,
 static JSBool MysqlPreparedStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
+	jsval rval = JSVAL_NULL;
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (pstmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		return JS_FALSE;
+	}
 
 	struct generated_keys *priv = malloc(sizeof(struct generated_keys));
 	assert(priv);
@@ -433,10 +489,23 @@ static JSBool MysqlPreparedStatement_getGeneratedKeys(JSContext *cx, unsigned ar
 	priv->cursor = 0;
 
 	JSObject *robj = JS_NewObject(cx, &MysqlGeneratedKeys_class, NULL, NULL);
-	JS_SetPrivate(robj, priv);
-	JS_DefineFunctions(cx, robj, MysqlGeneratedKeys_functions);
+	if (robj == NULL) {
+		JS_ReportError(cx, "Failed to create a new object\n");
+		dlog(LOG_ALERT, "Failed to create a new object\n");
+		goto out;
+	}
 
-	JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(robj));
+	JS_SetPrivate(robj, priv);
+	if (JS_DefineFunctions(cx, robj, MysqlGeneratedKeys_functions) == JS_FALSE) {
+		JS_ReportError(cx, "Failed to define functions for MysqlGeneratedKeys\n");
+		dlog(LOG_ALERT, "Failed to define functions for MysqlGeneratedKeys\n");
+		goto out;
+	}
+
+	rval = OBJECT_TO_JSVAL(robj);
+
+out:
+	JS_SET_RVAL(cx, vp, rval);
 	return JS_TRUE;
 }
 
@@ -444,6 +513,12 @@ static JSBool MysqlPreparedStatement_getResultSet(JSContext *cx, unsigned argc, 
 {
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+
+	if (pstmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		return JS_TRUE;
+	}
 
 	if (!pstmt->r_len) {
 		JS_SET_RVAL(cx, vp, JSVAL_NULL);
@@ -458,13 +533,18 @@ static JSBool MysqlPreparedStatement_getUpdateCount(JSContext *cx, unsigned argc
 {
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	my_ulonglong rows = -1;
 
-	if (pstmt->r_len) {
-		my_ulonglong rows = mysql_stmt_affected_rows(pstmt->stmt);
-		JS_SET_RVAL(cx, vp, JS_NumberValue(rows));
-	} else
-		JS_SET_RVAL(cx, vp, JS_NumberValue(-1));
+	if (pstmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		goto out;
+	}
 
+	if (pstmt->r_len)
+		rows = mysql_stmt_affected_rows(pstmt->stmt);
+
+out:
+	JS_SET_RVAL(cx, vp, JS_NumberValue(rows));
 	return JS_TRUE;
 }
 
@@ -473,6 +553,11 @@ static inline JSBool MysqlPreparedStatement_set(JSContext *cx, unsigned argc, js
 	jsval this = JS_THIS(cx, vp);
 	*pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 	*result = JS_FALSE;
+
+	if (pstmt == NULL) {
+		dlog(LOG_ALERT, "The statement property is not set\n");
+		goto out_false;
+	}
 
 	if (argc < 1)
 		goto out_false;
@@ -549,11 +634,17 @@ static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsv
 	 * This is well documented in jsapi.h, just before the
 	 * prototype for JS_EncodeCharacters().
 	 */
-	JS_EncodeCharacters(cx, jsbuf, jslen, NULL, &clen); // FIXME check return value
+	if (JS_EncodeCharacters(cx, jsbuf, jslen, NULL, &clen) == JS_FALSE)
+		return ret;
+
 	char *cbuf = malloc(clen);
 	assert(cbuf);
 
-	JS_EncodeCharacters(cx, jsbuf, jslen, cbuf, &clen); // FIXME check return value
+	if (JS_EncodeCharacters(cx, jsbuf, jslen, cbuf, &clen) == JS_FALSE) {
+		free(cbuf);
+		return ret;
+	}
+
 	pstmt->p_bind[i].buffer_type = MYSQL_TYPE_STRING;
 	pstmt->p_bind[i].buffer = cbuf;
 	pstmt->p_bind[i].buffer_length = clen;
@@ -614,6 +705,7 @@ static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsv
 	jsval this = JS_THIS(cx, vp);
 	jsval nativeSQL_argv[] = {JS_ARGV(cx, vp)[0]};
 	jsval nativeSQL_jsv;
+	jsval rval = JSVAL_NULL;
 
 	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(this), "nativeSQL", 1, nativeSQL_argv, &nativeSQL_jsv))
 		return JS_FALSE;
@@ -632,7 +724,7 @@ static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsv
 		nativeSQL = NULL;
 		free(pstmt);
 		pstmt = NULL;
-		return JS_FALSE; // FIXME free(pstmt)
+		return JS_FALSE;
 	}
 	if (mysql_stmt_prepare(pstmt->stmt, nativeSQL, strlen(nativeSQL))) {
 		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
@@ -640,7 +732,7 @@ static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsv
 		nativeSQL = NULL;
 		free(pstmt);
 		pstmt = NULL;
-		return JS_FALSE; // FIXME free(pstmt)
+		return JS_FALSE;
 	}
 
 	pstmt->p_len = mysql_stmt_param_count(pstmt->stmt);
@@ -680,15 +772,27 @@ static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsv
 	}
 
 	JSObject *robj = JS_NewObject(cx, &MysqlPreparedStatement_class, NULL, NULL);
+	if (robj == NULL) {
+		JS_ReportError(cx, "Failed to create a new object\n");
+		dlog(LOG_ALERT, "Failed to create a new object\n");
+		goto out;
+	}
+
 	JS_SetPrivate(robj, pstmt);
 
 	JS_DefineProperty(cx, robj, "connection", this, NULL, NULL, JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
-	JS_DefineFunctions(cx, robj, MysqlPreparedStatement_functions); // FIXME check return value
+	if (JS_DefineFunctions(cx, robj, MysqlPreparedStatement_functions) == JS_FALSE) {
+		JS_ReportError(cx, "Failed to define functions\n");
+		dlog(LOG_ALERT, "Failed to define functions\n");
+		goto out;
+	}
 
+	rval = OBJECT_TO_JSVAL(robj);
+
+out:
 	free(nativeSQL);
 	nativeSQL = NULL;
-	
-	JS_SET_RVAL(cx, vp, OBJECT_TO_JSVAL(robj));
+	JS_SET_RVAL(cx, vp, rval);
 	return JS_TRUE;
 }
 
@@ -705,12 +809,9 @@ static JSFunctionSpec MysqlConnection_functions[] = {
 
 static JSBool MysqlDriver_acceptsURL(JSContext *cx, unsigned argc, jsval *vp)
 {
-	JSString *url_str = JS_ValueToString(cx, JS_ARGV(cx, vp)[0]);
-	// FIXME check return value
-	// FIXME root url_str (protect from GC) -> https://developer.mozilla.org/en-US/docs/SpiderMonkey/JSAPI_Reference/JS_ValueToString
+	char *url = JSString_to_CString(cx, JS_ARGV(cx, vp)[0]);
 
-	char *url = JS_EncodeString(cx, url_str);
-	printf("mysql check: '%s'\n", url);
+	dlog(LOG_INFO, "mysql check: '%s'\n", url);
 	if (strncmp(url, "mysql://", 8))
 		JS_SET_RVAL(cx, vp, JSVAL_FALSE);
 	else
@@ -727,15 +828,11 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 	if (!argc)
 		goto out;
 
-	JSString *url_str = JS_ValueToString(cx, JS_ARGV(cx, vp)[0]);
-	// FIXME check return value
-	// FIXME root url_str (protect from GC) -> https://developer.mozilla.org/en-US/docs/SpiderMonkey/JSAPI_Reference/JS_ValueToString
-
 	/* If we can't parse the URL, just return NULL (but no error) to
 	 * allow the DriverManager code to try the next driver */
 	ret = JS_TRUE;
 
-	char *url = JS_EncodeString(cx, url_str);
+	char *url = JSString_to_CString(cx, JS_ARGV(cx, vp)[0]);
 	if (strncmp(url, "mysql://", 8))
 		goto out_clean;
 
@@ -791,13 +888,31 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 		goto out_clean;
 	}
 
-	mysql_set_character_set(mysql, "utf8"); // FIXME check return value
+	if (mysql_set_character_set(mysql, "utf8") != 0) {
+		ret = JS_FALSE;
+		JS_ReportError(cx, "Failed to set the character set for the connector\n");
+		dlog(LOG_ALERT, "Failed to set the character set for the connector\n");
+		goto out_clean;
+	}
 
 	/* Connection is successful. Create a new connection object and
 	 * link the mysql object to it. */
 	JSObject *robj =  JS_NewObject(cx, &MysqlConnection_class, NULL, NULL);
+	if (robj == NULL) {
+		ret = JS_FALSE;
+		JS_ReportError(cx, "Failed to create a new object\n");
+		dlog(LOG_ALERT, "Failed to create a new object\n");
+		goto out_clean;
+	}
+
 	JS_SetPrivate(robj, mysql);
-	JS_DefineFunctions(cx, robj, MysqlConnection_functions); // FIXME check return value
+
+	if (JS_DefineFunctions(cx, robj, MysqlConnection_functions) == JS_FALSE) {
+		ret = JS_FALSE;
+		JS_ReportError(cx, "Failed to define functions for MysqlConnection class\n");
+		dlog(LOG_ALERT, "Failed to define functions\n");
+		goto out_clean;
+	}
 	rval = OBJECT_TO_JSVAL(robj);
 
 out_clean:
