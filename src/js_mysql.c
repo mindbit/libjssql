@@ -530,35 +530,60 @@ out:
 static JSBool MysqlStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
+
+	/* if it is a simple statement set the SQL command*/
+	if (argc == 1) {
+		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
+			JS_SET_RVAL(cx, vp, JSVAL_NULL);
+			goto out;
+		}
+	}
+
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 
 	if (pstmt == NULL) {
 		dlog(LOG_ALERT, "The statement property is not set\n");
-		return JS_FALSE;
+		goto out;
 	}
 
 	if (!prepared_statement_execute(cx, pstmt))
-		return JS_FALSE;
+		goto out;
 
 	prepared_statement_get_result_set(cx, pstmt, &JS_RVAL(cx, vp));
+	return JS_TRUE;
+
+out:
+	JS_SET_RVAL(cx, vp, JSVAL_NULL);
 	return JS_TRUE;
 }
 
 static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
+	jsval rval = JS_NumberValue(-1);
+
+	/* if it is a simple statement set the SQL command*/
+	if (argc > 0) {
+		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
+			goto out;
+		}
+	}
+
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 
 	if (pstmt == NULL) {
 		dlog(LOG_ALERT, "The statement property is not set\n");
-		return JS_FALSE;
+		goto out;
 	}
 
 	if (!prepared_statement_execute(cx, pstmt))
-		return JS_FALSE;
-
+		goto out;
+	
 	my_ulonglong rows = mysql_stmt_affected_rows(pstmt->stmt);
-	JS_SET_RVAL(cx, vp, JS_NumberValue(rows));
+	rval = JS_NumberValue(rows);
+
+out:
+	JS_SET_RVAL(cx, vp, rval);
 	return JS_TRUE;
 }
 
