@@ -152,6 +152,112 @@ static JSFunctionSpec MysqlGeneratedKeys_functions[] = {
 	JS_FS_END
 };
 
+static JSBool
+Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
+{
+	JSBool ret = JS_TRUE;
+	jsval nativeSQL_argv[] = {JS_ARGV(cx, vp)[0]};
+	jsval nativeSQL_jsv;
+	jsval conn;
+
+	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(obj), "getConnection",
+						argc, vp, &conn)) {
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to call getConnection\n");
+		goto out;
+	}
+
+	if (JSVAL_IS_NULL(conn)) {
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "NULL Connection\n");
+		goto out;
+	}
+
+	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(conn), "nativeSQL", 1,
+							nativeSQL_argv, &nativeSQL_jsv)) {
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to call nativeSQL\n");
+		goto out;
+	}
+
+	char *nativeSQL = JSString_to_CString(cx, nativeSQL_jsv);
+	MYSQL *mysql = (MYSQL *)JS_GetPrivate(JSVAL_TO_OBJECT(conn));
+	if (mysql == NULL) {
+		free(nativeSQL);
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to get MYSQL property\n");
+		goto out;
+	}
+
+	struct prepared_statement *pstmt = malloc(sizeof(struct prepared_statement));
+	assert(pstmt);
+	memset(pstmt, 0, sizeof(struct prepared_statement));
+
+	pstmt->stmt = mysql_stmt_init(mysql);
+	if (!pstmt->stmt) {
+		free(nativeSQL);
+		nativeSQL = NULL;
+		free(pstmt);
+		pstmt = NULL;
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to initialize statement\n");
+		goto out;
+	}
+
+	if (mysql_stmt_prepare(pstmt->stmt, nativeSQL, strlen(nativeSQL))) {
+		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		free(nativeSQL);
+		nativeSQL = NULL;
+		free(pstmt);
+		pstmt = NULL;
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to prepare statement\n");
+		goto out;
+	}
+
+	pstmt->p_len = mysql_stmt_param_count(pstmt->stmt);
+	if (pstmt->p_len) {
+		pstmt->p_bind = malloc(pstmt->p_len * sizeof(MYSQL_BIND));
+		assert(pstmt->p_bind);
+		memset(pstmt->p_bind, 0, pstmt->p_len * sizeof(MYSQL_BIND));
+	}
+
+	/* Invoke mysql_stmt_fetch() with a zero-length buffer for all
+	 * colums, and pointers in which the real length can be stored.
+	 * This allows us to use mysql_stmt_fetch_column() with the
+	 * real length and to not force column types before calling
+	 * mysql_stmt_fetch(). This maps well to the JDBC API, where
+	 * individual colums are retrieved from the ResultSet after
+	 * executing the query.
+	 *
+	 * Using zero-length buffers is documented in the
+	 * mysql_stmt_fetch() manual page:
+	 * http://dev.mysql.com/doc/refman/5.1/en/mysql-stmt-fetch.html
+	 */
+	pstmt->r_len = mysql_stmt_field_count(pstmt->stmt);
+	if (pstmt->r_len) {
+		pstmt->r_bind = malloc(pstmt->r_len * sizeof(MYSQL_BIND));
+		assert(pstmt->r_bind);
+		memset(pstmt->r_bind, 0, pstmt->r_len * sizeof(MYSQL_BIND));
+		pstmt->r_bind_len = malloc(pstmt->r_len * sizeof(*(pstmt->r_bind_len)));
+		assert(pstmt->r_bind_len);
+		pstmt->r_is_null = malloc(pstmt->r_len * sizeof(my_bool));
+		assert(pstmt->r_is_null);
+	}
+
+	unsigned int i;
+	for (i = 0; i < pstmt->r_len; i++) {
+		pstmt->r_bind[i].length = &pstmt->r_bind_len[i];
+		pstmt->r_bind[i].is_null = &pstmt->r_is_null[i];
+	}
+
+	JS_SetPrivate(JSVAL_TO_OBJECT(obj), pstmt);
+	free(nativeSQL);
+
+out:
+	return ret;
+}
+
 /* }}} MysqlPreparedGeneratedKeys */
 
 /* {{{ MysqlStatement */
@@ -422,6 +528,21 @@ out:
 static JSBool MysqlPreparedStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
+	jsval ret = JSVAL_TRUE;
+
+	if (argc < 0 || argc > 2) {
+		dlog(LOG_WARNING, "Wrong number of arguments\n");
+		ret = JSVAL_FALSE;
+		goto out;
+	}
+
+	if (argc > 0) {
+		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
+			ret = JSVAL_FALSE;
+			goto out;
+		}
+	}
+
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 
 	if (pstmt == NULL) {
@@ -432,7 +553,10 @@ static JSBool MysqlPreparedStatement_execute(JSContext *cx, unsigned argc, jsval
 	if (!prepared_statement_execute(cx, pstmt))
 		return JS_FALSE;
 
-	JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(pstmt->r_len > 0));
+	ret = BOOLEAN_TO_JSVAL(pstmt->r_len > 0);
+
+out:
+	JS_SET_RVAL(cx, vp, ret);
 	return JS_TRUE;
 }
 
@@ -702,73 +826,11 @@ static JSBool MysqlConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
 
 static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
 {
-	jsval this = JS_THIS(cx, vp);
-	jsval nativeSQL_argv[] = {JS_ARGV(cx, vp)[0]};
-	jsval nativeSQL_jsv;
 	jsval rval = JSVAL_NULL;
 
-	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(this), "nativeSQL", 1, nativeSQL_argv, &nativeSQL_jsv))
-		return JS_FALSE;
-
-	JSString *nativeSQL_str = JS_ValueToString(cx, nativeSQL_jsv);
-	char *nativeSQL = JS_EncodeString(cx, nativeSQL_str);
-
-	MYSQL *mysql = (MYSQL *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	struct prepared_statement *pstmt = malloc(sizeof(struct prepared_statement));
-	assert(pstmt); // FIXME return error
-	memset(pstmt, 0, sizeof(struct prepared_statement));
-
-	pstmt->stmt = mysql_stmt_init(mysql);
-	if (!pstmt->stmt) {
-		free(nativeSQL);
-		nativeSQL = NULL;
-		free(pstmt);
-		pstmt = NULL;
-		return JS_FALSE;
-	}
-	if (mysql_stmt_prepare(pstmt->stmt, nativeSQL, strlen(nativeSQL))) {
-		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
-		free(nativeSQL);
-		nativeSQL = NULL;
-		free(pstmt);
-		pstmt = NULL;
-		return JS_FALSE;
-	}
-
-	pstmt->p_len = mysql_stmt_param_count(pstmt->stmt);
-	if (pstmt->p_len) {
-		pstmt->p_bind = malloc(pstmt->p_len * sizeof(MYSQL_BIND));
-		assert(pstmt->p_bind);
-		memset(pstmt->p_bind, 0, pstmt->p_len * sizeof(MYSQL_BIND));
-	}
-
-	/* Invoke mysql_stmt_fetch() with a zero-length buffer for all
-	 * colums, and pointers in which the real length can be stored.
-	 * This allows us to use mysql_stmt_fetch_column() with the
-	 * real length and to not force column types before calling
-	 * mysql_stmt_fetch(). This maps well to the JDBC API, where
-	 * individual colums are retrieved from the ResultSet after
-	 * executing the query.
-	 *
-	 * Using zero-length buffers is documented in the
-	 * mysql_stmt_fetch() manual page:
-	 * http://dev.mysql.com/doc/refman/5.1/en/mysql-stmt-fetch.html
-	 */
-	pstmt->r_len = mysql_stmt_field_count(pstmt->stmt);
-	if (pstmt->r_len) {
-		pstmt->r_bind = malloc(pstmt->r_len * sizeof(MYSQL_BIND));
-		assert(pstmt->r_bind);
-		memset(pstmt->r_bind, 0, pstmt->r_len * sizeof(MYSQL_BIND));
-		pstmt->r_bind_len = malloc(pstmt->r_len * sizeof(*(pstmt->r_bind_len)));
-		assert(pstmt->r_bind_len);
-		pstmt->r_is_null = malloc(pstmt->r_len * sizeof(my_bool));
-		assert(pstmt->r_is_null);
-	}
-
-	unsigned int i;
-	for (i = 0; i < pstmt->r_len; i++) {
-		pstmt->r_bind[i].length = &pstmt->r_bind_len[i];
-		pstmt->r_bind[i].is_null = &pstmt->r_is_null[i];
+	if (argc < 1 || argc > 2) {
+		dlog(LOG_WARNING, "Wrong number of arguments\n");
+		goto out;
 	}
 
 	JSObject *robj = JS_NewObject(cx, &MysqlPreparedStatement_class, NULL, NULL);
@@ -778,20 +840,19 @@ static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsv
 		goto out;
 	}
 
-	JS_SetPrivate(robj, pstmt);
-
-	JS_DefineProperty(cx, robj, "connection", this, NULL, NULL, JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
+	JS_DefineProperty(cx, robj, "connection", JS_THIS(cx, vp), NULL, NULL, JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
 	if (JS_DefineFunctions(cx, robj, MysqlPreparedStatement_functions) == JS_FALSE) {
 		JS_ReportError(cx, "Failed to define functions\n");
 		dlog(LOG_ALERT, "Failed to define functions\n");
 		goto out;
 	}
 
+	if (Mysql_setStatement(cx, argc, vp, OBJECT_TO_JSVAL(robj)) == JS_FALSE)
+		goto out;
+
 	rval = OBJECT_TO_JSVAL(robj);
 
 out:
-	free(nativeSQL);
-	nativeSQL = NULL;
 	JS_SET_RVAL(cx, vp, rval);
 	return JS_TRUE;
 }
