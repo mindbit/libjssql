@@ -260,39 +260,6 @@ out:
 
 /* }}} MysqlPreparedGeneratedKeys */
 
-/* {{{ MysqlStatement */
-
-static JSBool MysqlStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
-{
-	return JS_FALSE;
-}
-
-static JSBool MysqlStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
-{
-	return JS_FALSE;
-}
-
-static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
-{
-	return JS_FALSE;
-}
-
-static JSBool MysqlStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
-{
-	return getConnection(cx, vp);
-}
-
-static JSFunctionSpec MysqlStatement_functions[] = {
-	JS_FS("execute", MysqlStatement_execute, 1, 0),
-	JS_FS("executeQuery", MysqlStatement_executeQuery, 1, 0),
-	JS_FS("executeUpdate", MysqlStatement_executeUpdate, 1, 0),
-	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
-	JS_FS_END
-};
-
-/* }}} MysqlStatement */
-
-
 /* {{{ MysqlPreparedResultSet */
 
 static JSClass MysqlPreparedResultSet_class = {
@@ -525,7 +492,7 @@ out:
 	return JS_TRUE;
 }
 
-static JSBool MysqlPreparedStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool MysqlStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	jsval ret = JSVAL_TRUE;
@@ -560,7 +527,7 @@ out:
 	return JS_TRUE;
 }
 
-static JSBool MysqlPreparedStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool MysqlStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -577,7 +544,7 @@ static JSBool MysqlPreparedStatement_executeQuery(JSContext *cx, unsigned argc, 
 	return JS_TRUE;
 }
 
-static JSBool MysqlPreparedStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -595,7 +562,7 @@ static JSBool MysqlPreparedStatement_executeUpdate(JSContext *cx, unsigned argc,
 	return JS_TRUE;
 }
 
-static JSBool MysqlPreparedStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool MysqlStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	jsval rval = JSVAL_NULL;
@@ -633,7 +600,7 @@ out:
 	return JS_TRUE;
 }
 
-static JSBool MysqlPreparedStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool MysqlStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -653,7 +620,7 @@ static JSBool MysqlPreparedStatement_getResultSet(JSContext *cx, unsigned argc, 
 	return JS_TRUE;
 }
 
-static JSBool MysqlPreparedStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool MysqlStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -671,6 +638,22 @@ out:
 	JS_SET_RVAL(cx, vp, JS_NumberValue(rows));
 	return JS_TRUE;
 }
+
+static JSBool MysqlStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
+{
+	return getConnection(cx, vp);
+}
+
+static JSFunctionSpec MysqlStatement_functions[] = {
+	JS_FS("execute", MysqlStatement_execute, 2, 0),
+	JS_FS("executeQuery", MysqlStatement_executeQuery, 1, 0),
+	JS_FS("executeUpdate", MysqlStatement_executeUpdate, 2, 0),
+	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
+	JS_FS("getGeneratedKeys", MysqlStatement_getGeneratedKeys, 0, 0),
+	JS_FS("getResultSet", MysqlStatement_getResultSet, 0, 0),
+	JS_FS("getUpdateCount", MysqlStatement_getUpdateCount, 0, 0),
+	JS_FS_END
+};
 
 static inline JSBool MysqlPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp, struct prepared_statement **pstmt, uint32_t *i, JSBool *result)
 {
@@ -778,13 +761,13 @@ static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsv
 }
 
 static JSFunctionSpec MysqlPreparedStatement_functions[] = {
-	JS_FS("execute", MysqlPreparedStatement_execute, 0, 0),
-	JS_FS("executeQuery", MysqlPreparedStatement_executeQuery, 0, 0),
-	JS_FS("executeUpdate", MysqlPreparedStatement_executeUpdate, 0, 0),
+	JS_FS("execute", MysqlStatement_execute, 0, 0),
+	JS_FS("executeQuery", MysqlStatement_executeQuery, 0, 0),
+	JS_FS("executeUpdate", MysqlStatement_executeUpdate, 0, 0),
 	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
-	JS_FS("getGeneratedKeys", MysqlPreparedStatement_getGeneratedKeys, 0, 0),
-	JS_FS("getResultSet", MysqlPreparedStatement_getResultSet, 0, 0),
-	JS_FS("getUpdateCount", MysqlPreparedStatement_getUpdateCount, 0, 0),
+	JS_FS("getGeneratedKeys", MysqlStatement_getGeneratedKeys, 0, 0),
+	JS_FS("getResultSet", MysqlStatement_getResultSet, 0, 0),
+	JS_FS("getUpdateCount", MysqlStatement_getUpdateCount, 0, 0),
 	JS_FS("setNumber", MysqlPreparedStatement_setNumber, 2, 0),
 	JS_FS("setString", MysqlPreparedStatement_setString, 2, 0),
 	JS_FS_END
