@@ -181,6 +181,12 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 	}
 
 	char *nativeSQL = JSString_to_CString(cx, nativeSQL_jsv);
+	if (nativeSQL == NULL) {
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to convert the SQL query\n");
+		goto out;
+	}
+
 	MYSQL *mysql = (MYSQL *)JS_GetPrivate(JSVAL_TO_OBJECT(conn));
 	if (mysql == NULL) {
 		free(nativeSQL);
@@ -190,11 +196,16 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 	}
 
 	struct prepared_statement *pstmt = malloc(sizeof(struct prepared_statement));
-	assert(pstmt);
+	if (mysql == NULL) {
+		free(nativeSQL);
+		ret = JS_FALSE;
+		dlog(LOG_ALERT, "Failed to get MYSQL property\n");
+		goto out;
+	}
 	memset(pstmt, 0, sizeof(struct prepared_statement));
 
 	pstmt->stmt = mysql_stmt_init(mysql);
-	if (!pstmt->stmt) {
+	if (pstmt->stmt == NULL) {
 		free(nativeSQL);
 		nativeSQL = NULL;
 		free(pstmt);
@@ -205,13 +216,14 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 	}
 
 	if (mysql_stmt_prepare(pstmt->stmt, nativeSQL, strlen(nativeSQL))) {
+		dlog(LOG_ALERT, "Failed to prepare statement %s\n", mysql_stmt_error(pstmt->stmt));
 		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
 		free(nativeSQL);
 		nativeSQL = NULL;
 		free(pstmt);
 		pstmt = NULL;
 		ret = JS_FALSE;
-		dlog(LOG_ALERT, "Failed to prepare statement\n");
+		
 		goto out;
 	}
 
@@ -429,13 +441,6 @@ static void MysqlPreparedStatement_finalize(JSContext *cx, JSObject *obj) {
 		clear_statement(pstmt);
 }
 
-
-static JSClass MysqlPreparedStatement_class = {
-	"MysqlPreparedStatement", JSCLASS_HAS_PRIVATE,
-	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, MysqlPreparedStatement_finalize,
-};
-
 static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statement *pstmt)
 {
 	unsigned int i;
@@ -504,6 +509,12 @@ static JSBool MysqlStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
 	}
 
 	if (argc > 0) {
+		/* if there is an old statement clear the memory */
+		struct prepared_statement *pstmt = 
+				(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+		if (pstmt)
+			clear_statement(pstmt);
+
 		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
 			ret = JSVAL_FALSE;
 			goto out;
@@ -533,6 +544,12 @@ static JSBool MysqlStatement_executeQuery(JSContext *cx, unsigned argc, jsval *v
 
 	/* if it is a simple statement set the SQL command*/
 	if (argc == 1) {
+		/* if there is an old statement clear the memory */
+		struct prepared_statement *pstmt = 
+				(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+		if (pstmt)
+			clear_statement(pstmt);
+
 		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
 			JS_SET_RVAL(cx, vp, JSVAL_NULL);
 			goto out;
@@ -564,6 +581,12 @@ static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *
 
 	/* if it is a simple statement set the SQL command*/
 	if (argc > 0) {
+		/* if there is an old statement clear the memory */
+		struct prepared_statement *pstmt = 
+				(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+		if (pstmt)
+			clear_statement(pstmt);
+
 		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
 			goto out;
 		}
@@ -673,11 +696,17 @@ static JSFunctionSpec MysqlStatement_functions[] = {
 	JS_FS("execute", MysqlStatement_execute, 2, 0),
 	JS_FS("executeQuery", MysqlStatement_executeQuery, 1, 0),
 	JS_FS("executeUpdate", MysqlStatement_executeUpdate, 2, 0),
-	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
+	JS_FS("getConnection", MysqlStatement_getConnection, 0, 0),
 	JS_FS("getGeneratedKeys", MysqlStatement_getGeneratedKeys, 0, 0),
 	JS_FS("getResultSet", MysqlStatement_getResultSet, 0, 0),
 	JS_FS("getUpdateCount", MysqlStatement_getUpdateCount, 0, 0),
 	JS_FS_END
+};
+
+static JSClass MysqlStatement_class = {
+	"MysqlStatement", JSCLASS_HAS_PRIVATE,
+	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, MysqlPreparedStatement_finalize,
 };
 
 static inline JSBool MysqlPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp, struct prepared_statement **pstmt, uint32_t *i, JSBool *result)
@@ -789,13 +818,19 @@ static JSFunctionSpec MysqlPreparedStatement_functions[] = {
 	JS_FS("execute", MysqlStatement_execute, 0, 0),
 	JS_FS("executeQuery", MysqlStatement_executeQuery, 0, 0),
 	JS_FS("executeUpdate", MysqlStatement_executeUpdate, 0, 0),
-	JS_FS("getConnection", MysqlStatement_getConnection, 1, 0),
+	JS_FS("getConnection", MysqlStatement_getConnection, 0, 0),
 	JS_FS("getGeneratedKeys", MysqlStatement_getGeneratedKeys, 0, 0),
 	JS_FS("getResultSet", MysqlStatement_getResultSet, 0, 0),
 	JS_FS("getUpdateCount", MysqlStatement_getUpdateCount, 0, 0),
 	JS_FS("setNumber", MysqlPreparedStatement_setNumber, 2, 0),
 	JS_FS("setString", MysqlPreparedStatement_setString, 2, 0),
 	JS_FS_END
+};
+
+static JSClass MysqlPreparedStatement_class = {
+	"MysqlPreparedStatement", JSCLASS_HAS_PRIVATE,
+	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
+	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, MysqlPreparedStatement_finalize,
 };
 
 /* }}} MysqlPreparedStatement */
@@ -824,7 +859,7 @@ static JSClass MysqlConnection_class = {
 
 static JSBool MysqlConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
 {
-	return createStatement(cx, vp, NULL, MysqlStatement_functions);
+	return createStatement(cx, vp, &MysqlStatement_class, MysqlStatement_functions);
 }
 
 static JSBool MysqlConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
