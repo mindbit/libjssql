@@ -1,3 +1,114 @@
+function comparison_test() {
+	var t1, t2;
+	var n = 100000;
+	var simple_statements = [
+							"select * from students",
+							"select * from students where age > -1",
+							"select age from students where name = 'Test' AND age < 30"		
+							];
+
+	var prepared_parameters = ["10", "20"];
+	var prepared_statements = [
+								"select * from students where age < ?",
+								"select * from students where age > ? and age < ?",
+								"select age from students where name = 'Test' AND age < ?"		
+								];
+	t1 = gettimeoftheday();
+	var conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (conn == null)
+		return "FAIL";
+	var stmt = conn.createStatement(); //create simple stmt
+	
+	var pstmt = [];
+	for (i = 0; i < 3; i++) {	//create prepared stmt
+		pstmt[i] = conn.prepareStatement(prepared_statements[i]);
+	}
+
+	var crt1 = 0, crt2 = 0;
+	//set parameters' value
+	pstmt[0].setNumber(1, 10);
+	pstmt[1].setNumber(1, 10);
+	pstmt[2].setNumber(1, 10);
+	pstmt[1].setNumber(2, 20);
+
+	for (i = 0; i < n; i++) {
+		if ((i % 2) == 0) {
+			stmt.execute(simple_statements[(crt1++) % 2]);
+		} else {
+			pstmt[(crt2++) % 2].execute();
+		}
+	}
+
+	t2 = gettimeoftheday();
+	
+	print("Time: ");
+	println(t2 - t1);
+
+	return "PASS";
+}
+
+function integration_test() {
+	var connectionPostgres, connectionMysql;
+	var statementPostgres, statementMysql;
+
+	connectionPostgres = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (connectionPostgres == null) {
+		println("Failed to connect to PostgreSQL database");
+		return "FAIL";
+	}
+
+	connectionMysql = DriverManager.getConnection("mysql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	if (connectionMysql == null) {
+		println("Failed to connect to MySQL database");
+		return "FAIL";
+	}
+
+	statementMysql = connectionMysql.createStatement();
+	statementPostgres = connectionPostgres.createStatement();
+	if (statementMysql == null || statementPostgres == null) {
+		println("Failed to create statement");
+		return "FAIL";
+	}
+
+	statementPostgres.executeUpdate("DROP TABLE IF EXISTS test");
+	if (statementPostgres.execute("CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(40) not null, age INT);") == false) {
+		println("Failed to create the table");
+		return "FAIL";
+	}
+
+	var preparedStatementPostgres = connectionPostgres.prepareStatement("INSERT INTO test (id, name, age) values (?, ?, ?) ");
+	if (preparedStatementPostgres == null) {
+		println("Failed to prepare the statement");
+		return "FAIL";
+	}
+
+	//collect info from mysql
+	var resultMysql = statementMysql.executeQuery("SELECT * from students");
+	if (resultMysql == null) {
+		println("Failed to collect restuls from MYSQL");
+		return "FAIL";
+	}
+
+	//populate PostgreSQL database
+	while(resultMysql.next()) {
+		preparedStatementPostgres.setNumber(1, resultMysql.getNumber(1));
+		preparedStatementPostgres.setString(2, resultMysql.getString(2));
+		preparedStatementPostgres.setNumber(3, resultMysql.getNumber(3));
+		preparedStatementPostgres.executeUpdate();
+	}
+
+	//collect info from postgresql
+	var resultPostgres = statementPostgres.executeQuery("SELECT * from test");
+
+	//check if they are identical
+	if (!compareTwoObjects(resultMysql, resultPostgres)) {
+		println("Different objects");
+		return "FAIL";
+	}
+
+	return "PASS"
+}
+
 function connection_test() {
 	var conn;
 
@@ -229,7 +340,6 @@ function compareTwoObjects(x, y) {
 
 function getGeneratedKeys_test() {
 	var conn, stmt, rs;
-
 	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
 	if (conn == null)
 		return "FAIL";
@@ -239,7 +349,7 @@ function getGeneratedKeys_test() {
 		return "FAIL";
 	
 	/* sanity checks*/
-	i = stmt.executeUpdate("insert into students (name, age) values ('Test1',13)", false);
+	i = stmt.executeUpdate("insert into students (name, age) values ('Test1',13)", Statement.NO_GENERATED_KEYS);
 	if (i == -1)
 		return "FAIL";
 	rs = stmt.getGeneratedKeys();
@@ -254,7 +364,7 @@ function getGeneratedKeys_test() {
 		return "FAIL";
 
 	/* the correct call */
-	i = stmt.executeUpdate("insert into students (name, age) values ('Test1',13)", 1);
+	i = stmt.executeUpdate("insert into students (name, age) values ('Test1',13)", Statement.RETURN_GENERATED_KEYS);
 	if (i == -1)
 		return "FAIL";
 	rs = stmt.getGeneratedKeys();
@@ -264,7 +374,6 @@ function getGeneratedKeys_test() {
 	while(rs.next())
 		println("GeneratedKeys: ID ", rs.getNumber(1));
 
-	return "PASS";
 	return "PASS";
 }
 
@@ -361,7 +470,7 @@ function preparedStatement_getGeneratedKeys_test() {
 	if (conn == null)
 		return "FAIL";
 
-	stmt = conn.prepareStatement("insert into students (age, name) values (?,?)", true);
+	stmt = conn.prepareStatement("insert into students (age, name) values (?,?)", Statement.RETURN_GENERATED_KEYS);
 	if (stmt == null)
 		return "FAIL";
 
@@ -473,23 +582,23 @@ function simpleStatementResult_test() {
 
 	//check with column index
 	while (result.next()) {
-		print("Id: ");
-		print(result.getNumber(1));
-		print(" | Name: ")
-		print(result.getString(2));
-		print(" | Age: ");
-		println(result.getNumber(3));
+		// print("Id: ");
+		// print(result.getNumber(1));
+		// print(" | Name: ")
+		// print(result.getString(2));
+		// print(" | Age: ");
+		// println(result.getNumber(3));
 	} 
 
 	//check with column label
 	result.first();
 	while (result.next()) {
-		print("Id: ");
-		print(result.getNumber("id"));
-		print(" | Name: ")
-		print(result.getString("name"));
-		print(" | Age: ");
-		println(result.getNumber("age"));
+		// print("Id: ");
+		// print(result.getNumber("id"));
+		// print(" | Name: ")
+		// print(result.getString("name"));
+		// print(" | Age: ");
+		// println(result.getNumber("age"));
 	}
 
 	return "PASS";
@@ -549,6 +658,7 @@ function preparedStatementResult_test() {
 }
 
 function foo() {
+	//integration_test();
 	println("[Test  1] Testing connection ......................................... " + connection_test());
 	println("[Test  2] Testing createStatement .................................... " + createStatement_test());
 	println("[Test  3] Testing execute for simple statement ....................... " + execute_test());
@@ -569,7 +679,6 @@ function foo() {
 	println("[Test 18] Testing getConnection for prepared statement ............... " + preparedStatement_getConnection_test());
 	println("[Test 19] Testing ResultSet for a simple statement  .................. " + simpleStatementResult_test());
 	println("[Test 20] Testing ResultSet for a prepared statement  ................ " + preparedStatementResult_test());
-
 	//TODO add more complex tests (example: create a table, insert an element, get the result and check if it is the one expected)
 	return 0;
 }
