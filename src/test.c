@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/time.h>
 
 #include "js_mysql.h"
 #include "js_postgres.h"
@@ -39,6 +40,22 @@ void reportError(JSContext *cx, const char *message, JSErrorReport *report)
 	fprintf(stderr, "ERROR [%s:%u] %s\n",
 			report->filename ? report->filename : "<no filename>",
 			(unsigned int) report->lineno, message);
+}
+
+static JSBool gettimeoftheday(JSContext *cx, unsigned argc, jsval *vp)
+{
+	struct timeval t;
+    double elapsedTime;
+    jsval rval;
+
+    // start timer
+    gettimeofday(&t, NULL);
+    elapsedTime = t.tv_sec * 1000000 + t.tv_usec;
+
+	rval = JS_NumberValue(elapsedTime);;	
+
+	JS_SET_RVAL(cx, vp, rval);
+	return JS_TRUE;
 }
 
 static JSBool js_print(JSContext *cx, unsigned argc, jsval *vp)
@@ -193,6 +210,7 @@ int main(int argc, const char *argv[])
 	JS_DefineFunction(cx, global, "dump", js_dump, 0, 0);
 	JS_DefineFunction(cx, global, "print", js_print, 0, 0);
 	JS_DefineFunction(cx, global, "println", js_println, 0, 0);
+	JS_DefineFunction(cx, global, "gettimeoftheday", gettimeoftheday, 0, 0);
 
 	if (!JS_SqlInit(cx, global))
 		return 1;
