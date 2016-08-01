@@ -1,6 +1,6 @@
 AC_PREREQ(2.61)
 # Checks for programs.
-AC_INIT([libjssql], [0.0,1], [support@mindbit.ro])
+AC_INIT([libjssql], [0.0.1], [support@mindbit.ro])
 
 AC_CANONICAL_TARGET
 AC_CANONICAL_HOST
@@ -10,8 +10,6 @@ AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS([jssql_config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_PROG_CC
-AC_PROG_CXX
-AC_PROG_OBJC
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
@@ -22,127 +20,94 @@ AC_SUBST(MKDIR_P)
 
 CFLAGS="-Wall $CFLAGS"
 
-# Check system type
-case "$host_os" in
-linux*)
-     AC_DEFINE_UNQUOTED(LINUX,1,[This is a Linux kernel])
-     build_target="linux"
-     LIBPREFIX=
-     DLLDIR=lib
-     UNIXONLY="#"
-     AC_PATH_XTRA
-     ;;
-*cygwin*)
-     AC_DEFINE_UNQUOTED(CYGWIN,1,[This is a Cygwin system])
-     AC_DEFINE_UNQUOTED(WINDOWS,1,[This is a Windows system])
-     AC_CHECK_LIB(intl, gettext)
-     CFLAGS="-mms-bitfields $CFLAGS"
-     build_target="cygwin"
-     LIBPREFIX=lib
-     DLLDIR=bin
-     AC_PROG_CXX
-     UNIXONLY=""
-     ;;
-*mingw*)
-     AC_DEFINE_UNQUOTED(MINGW,1,[This is a MinGW system])
-	 AC_DEFINE_UNQUOTED(WINDOWS,1,[This is a Windows system])
-	 AC_DEFINE_UNQUOTED(_WIN32,1,[This is a Windows system])
-	 AC_CHECK_LIB(intl, gettext)
-	 LDFLAGS="$LDFLAGS -Wl,--export-all-symbols"
-	 LIBS="$LIBS -lws2_32 -lplibc -lgnurx -lole32"
-	 CFLAGS="-mms-bitfields $CFLAGS"
-	 CPPFLAGS="-D_WIN32_WINNT=0x0501 -DHAVE_STAT64=1 -D__USE_MINGW_ANSI_STDIO=1 $CPPFLAGS"
-	 build_target="mingw"
-	 AC_PROG_CXX
-	 LIBPREFIX=lib
-	 DLLDIR=bin
-	 UNIXONLY=""
-	 funcstocheck=""
-	 native_srcdir=$(cd $srcdir; pwd -W)
-	 ;;
-gnu*)
-	 AC_DEFINE_UNQUOTED(GNU,1,[This is a GNU system])
-	 build_target="gnu"
-	 UNIXONLY="#"
-     ;;
-*)
-     AC_MSG_RESULT(Unrecognised OS $host_os)
-     AC_DEFINE_UNQUOTED(OTHEROS,1,[Some strange OS])
-     UNIXONLY=""
-;;
-esac
 
-AC_MSG_CHECKING([for build target])
-AM_CONDITIONAL(LINUX, test "$build_target" = "linux")
-AM_CONDITIONAL(CYGWIN,  test "$build_target" = "cygwin")
-AM_CONDITIONAL(MINGW, test "$build_target" = "mingw")
-AM_CONDITIONAL(GNU, test "$build_target" = "gnu")
+# additional configure arguments
 
-AC_MSG_RESULT([$build_target])
-AC_SUBST(build_target)
+AC_ARG_WITH(js-include,
+    AC_HELP_STRING([--with-js-include=DIR], [search for mozjs (spidermonkey) headers in DIR]),
+    [
+        JS_INCLUDE="$withval"
+    ]
+)
 
-# functions
-AC_CHECK_FUNCS([memset munmap strcspn])
+AC_ARG_WITH(js-lib,
+    AC_HELP_STRING([--with-js-lib=NAME], [specify mozjs (spidermonkey) library name]),
+    [
+        JS_LIB="$withval"
+    ]
+)
 
-# headers
-AC_CHECK_HEADERS([fcntl.h],,AC_MSG_ERROR([Compiling libjssql requires standard UNIX headers files]))
+AC_ARG_WITH(jsmisc,
+    AC_HELP_STRING([--with-jsmisc=DIR], [search for jsmisc in DIR]),
+    [
+        JSMISC="$withval"
+    ]
+)
 
-# inline check
-AC_C_INLINE
 
-if test "$ac_cv_c_inline" != no ; then
-  AC_DEFINE(HAVE_INLINE, 1, [Have inline functions])
-  AC_SUBST(HAVE_INLINE)
+# test for SpiderMonkey 17.0 (mozjs 17.0)
+
+if test -z "$JS_INCLUDE" ; then
+    JS_INCLUDE=" \
+        /usr/include/js-17.0 \
+        /usr/local/include/js-17.0 \
+    "
+    AC_CHECK_HEADER(jsapi.h,[],[],-)
+fi
+for incpath in $JS_INCLUDE; do
+    if test "x$ac_cv_header_jsapi_h" != xyes ; then
+        AC_MSG_CHECKING([for jsapi.h in $incpath])
+        save_cppflags="$CPPFLAGS"
+        CPPFLAGS="-I$incpath $CPPFLAGS"
+        AC_PREPROC_IFELSE([AC_LANG_PROGRAM([[
+                #include <jsapi.h>
+            ]])],
+            [
+                AC_MSG_RESULT(yes)
+                ac_cv_header_jsapi_h=yes
+            ],
+            [
+                AC_MSG_RESULT(no)
+                CPPFLAGS="$save_cppflags"
+            ]
+        )
+   fi
+done
+if test "x$ac_cv_header_jsapi_h" != xyes ; then
+    AC_MSG_ERROR([jsapi.h not found])
 fi
 
-AC_FUNC_MALLOC
-AC_FUNC_MMAP
-AC_TYPE_OFF_T
-AC_TYPE_SIZE_T
-AC_TYPE_UINT32_T
-
-##########project dependencies##########
-AC_MSG_RESULT([checking for project dependencies])
-
-# libmozjs
-mozjs=false
-AC_MSG_CHECKING(for mozjs)
-AC_ARG_WITH(mozjs,
-  [  --with-mozjs=PFX       base of mozjs installation],
-  [AC_MSG_RESULT(mozjs path = "$with_mozjs")
-   case $with_mozjs in
-   no)
-     ;;
-   yes)
-    AC_CHECK_HEADERS(js-17.0/jsapi.h,
-     mozjs=true)
-     ;;
-   *)
-    LDFLAGS="-L$with_mozjs/lib $LDFLAGS"
-    CFLAGS="-I$with_mozjs/include/js-17.0 $CFLAGS"
- 	LIBS="-lmozjs-17.0 $LIBS"   
-	AC_CHECK_HEADERS(js-17.0/jsapi.h,
-     mozjs=true)
-    ;;
-   esac
-  ],
-  [AC_MSG_RESULT([--with-mozjs not specified])
-   LDFLAGS="-L/usr/local/lib $LDFLAGS"
-   LIBS="-lmozjs-17.0 $LIBS"
-   CFLAGS="-I/usr/local/include/js-17.0 $CFLAGS"
-   AC_CHECK_HEADERS(js-17.0/jsapi.h, 
-   mozjs=true   
-   )])
-AM_CONDITIONAL(HAVE_JS_17_0_JSAPI_H, test x$mozjs = xtrue)
-
-if test "x$mozjs" != "xtrue"; then
-  AC_MSG_ERROR([you need libmozjs-17.0 in order to build this project])
+if test -z "$JS_LIB" ; then
+    JS_LIB=" \
+        mozjs-17.0 \
+        mozjs \
+    "
+fi
+for lib in $JS_LIB; do
+    if test "x$js_lib_found" != xyes ; then
+        AC_CHECK_LIB([$lib],[JS_NewContext],[
+            LIBS="-l$lib $LIBS"
+            js_lib_found=yes
+        ])
+    fi
+done
+if test "x$js_lib_found" != xyes ; then
+    AC_MSG_ERROR([no usable mozjs (spidermonkey) library found])
 fi
 
-if test "$build_target" = "mingw"
-then
-  CYGWIN_MYSQL_MAGIC="#include <mysql/my_global.h>"
+
+# test for jsmisc
+
+if test -n "$JSMISC" ; then
+    CPPFLAGS="-I$JSMISC $CPPFLAGS"
 fi
+AC_CHECK_HEADER(jsmisc.h,[],[],-)
+if test "x$ac_cv_header_jsmisc_h" != xyes ; then
+    AC_MSG_ERROR([jsmisc.h not found])
+fi
+
+AC_CHECK_LIB([jsmisc],[__js_log])
+
 
 # test for mysql
 mysql=false
@@ -238,12 +203,13 @@ AC_ARG_WITH(postgres,
       postgres=true)])
 AM_CONDITIONAL(HAVE_POSTGRESQL_LIBPQ_FE_H, test x$postgres = xtrue)
 
+# Debug mode
 
 AC_ARG_ENABLE([debug],
     AS_HELP_STRING([--enable-debug], [Enable debugging mode]))
 
 AS_IF([test "x$enable_debug" = "xyes"], [
-  CFLAGS="$CFLAGS -DDEBUG"
+    CFLAGS="$CFLAGS -DDEBUG"
 ])
 
 # mysql
@@ -271,13 +237,6 @@ then
 else
   AM_CONDITIONAL(HAVE_POSTGRESQL_LIBPQ_FE_H, true)
   AC_DEFINE([HAVE_POSTGRESQL_LIBPQ_FE_H],[1],[Have postgres library])
-fi
-
-# postgres
-if test "x$mozjs" = "x1"
-then
-  AM_CONDITIONAL(HAVE_JS_17_0_JSAPI_H, true)
-  AC_DEFINE([HAVE_JS_17_0_JSAPI_H],[1],[Have Mozilla SpiderMonkey engine])
 fi
 
 AC_CONFIG_FILES([
