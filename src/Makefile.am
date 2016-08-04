@@ -5,13 +5,14 @@ libjssql_la_SOURCES = \
   js_utils.c \
   js_common.c
 
-if HAVE_POSTGRESQL_LIBPQ_FE_H
+if HAVE_POSTGRESQL
   libjssql_la_SOURCES += js_postgres.c
 endif
 
-if HAVE_MYSQL_MYSQL_H
+if HAVE_MYSQL
   libjssql_la_SOURCES += js_mysql.c
 endif
+
 libjssql_la_LIBADD = \
   $(LIBS)
 
