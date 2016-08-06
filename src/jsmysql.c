@@ -84,7 +84,7 @@ static void clear_statement(struct prepared_statement *pstmt)
  * @cx: JavaScript context
  * @obj: object
  */
-static void MysqlGeneratedKeys_finalize(JSContext *cx, JSObject *obj)
+static void MysqlGeneratedKeys_finalize(JSFreeOp *fop, JSObject *obj)
 {
 	struct generated_keys *priv = (struct generated_keys *)JS_GetPrivate(obj);
 
@@ -437,7 +437,7 @@ static JSFunctionSpec MysqlPreparedResultSet_functions[] = {
  * @cx: JavaScript context
  * @obj: object
  */
-static void MysqlPreparedStatement_finalize(JSContext *cx, JSObject *obj)
+static void MysqlPreparedStatement_finalize(JSFreeOp *fop, JSObject *obj)
 {
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(obj);
 
@@ -846,7 +846,7 @@ static JSClass MysqlPreparedStatement_class = {
  * @cx: JavaScript context
  * @obj: object
  */
-static void MysqlConnection_finalize(JSContext *cx, JSObject *obj)
+static void MysqlConnection_finalize(JSFreeOp *fop, JSObject *obj)
 {
 	MYSQL *mysql = (MYSQL *)JS_GetPrivate(obj);
 

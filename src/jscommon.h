@@ -22,5 +22,6 @@
 
 JSBool getConnection(JSContext *cx, jsval *vp);
 JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec *functions);
+JSBool nativeSQL(JSContext *cx, unsigned argc, jsval *vp);
 
 #endif
