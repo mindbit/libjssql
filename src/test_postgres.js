@@ -1,20 +1,26 @@
+// create table people(id serial primary key, name varchar(40), age int);
+
+function getPostgresConnection() {
+	return DriverManager.getConnection("postgresql://127.0.0.1/test_js_sql", "test_js_sql", "123456");
+}
+
 function comparison_test() {
 	var t1, t2;
 	var n = 100000;
 	var simple_statements = [
-							"select * from students",
-							"select * from students where age > -1",
-							"select age from students where name = 'Test' AND age < 30"		
+							"select * from people",
+							"select * from people where age > -1",
+							"select age from people where name = 'Test' AND age < 30"		
 							];
 
 	var prepared_parameters = ["10", "20"];
 	var prepared_statements = [
-								"select * from students where age < ?",
-								"select * from students where age > ? and age < ?",
-								"select age from students where name = 'Test' AND age < ?"		
+								"select * from people where age < ?",
+								"select * from people where age > ? and age < ?",
+								"select age from people where name = 'Test' AND age < ?"		
 								];
 	t1 = gettimeoftheday();
-	var conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	var conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 	var stmt = conn.createStatement(); //create simple stmt
@@ -51,13 +57,13 @@ function integration_test() {
 	var connectionPostgres, connectionMysql;
 	var statementPostgres, statementMysql;
 
-	connectionPostgres = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	connectionPostgres = getPostgresConnection();
 	if (connectionPostgres == null) {
 		println("Failed to connect to PostgreSQL database");
 		return "FAIL";
 	}
 
-	connectionMysql = DriverManager.getConnection("mysql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	connectionMysql = DriverManager.getConnection("mysql://127.0.0.1/test_js_sql", "test_js_sql", "123456");
 	if (connectionMysql == null) {
 		println("Failed to connect to MySQL database");
 		return "FAIL";
@@ -83,7 +89,7 @@ function integration_test() {
 	}
 
 	//collect info from mysql
-	var resultMysql = statementMysql.executeQuery("SELECT * from students");
+	var resultMysql = statementMysql.executeQuery("SELECT * from people");
 	if (resultMysql == null) {
 		println("Failed to collect restuls from MYSQL");
 		return "FAIL";
@@ -112,7 +118,7 @@ function integration_test() {
 function connection_test() {
 	var conn;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 	else
@@ -122,7 +128,7 @@ function connection_test() {
 function createStatement_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 	
@@ -136,7 +142,7 @@ function createStatement_test() {
 function execute_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 	
@@ -151,7 +157,7 @@ function execute_test() {
 function executeQuery_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 	
@@ -169,7 +175,7 @@ function executeQuery_test() {
 function executeUpdate_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 	
@@ -177,7 +183,7 @@ function executeUpdate_test() {
 	if (stmt == null)
 		return "FAIL";
 	
-	ret = stmt.executeUpdate("update students set age = 21 where name = 'Mihai'");
+	ret = stmt.executeUpdate("update people set age = 21 where name = 'Mihai'");
 	if (ret == -1)
 		return "FAIL";
 	else
@@ -187,7 +193,7 @@ function executeUpdate_test() {
 function preparedStatement_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -201,7 +207,7 @@ function preparedStatement_test() {
 function preparedStatement_set_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -231,7 +237,7 @@ function preparedStatement_set_test() {
 function preparedStatement_execute_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -254,7 +260,7 @@ function preparedStatement_execute_test() {
 function preparedStatement_executeQuery_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -278,11 +284,11 @@ function preparedStatement_executeQuery_test() {
 function preparedStatement_executeUpdate_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
-	stmt = conn.prepareStatement("update students set age = ? where name = ?");
+	stmt = conn.prepareStatement("update people set age = ? where name = ?");
 	if (stmt == null)
 		return "FAIL";
 
@@ -340,7 +346,7 @@ function compareTwoObjects(x, y) {
 
 function getGeneratedKeys_test() {
 	var conn, stmt, rs;
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -349,14 +355,14 @@ function getGeneratedKeys_test() {
 		return "FAIL";
 	
 	/* sanity checks*/
-	i = stmt.executeUpdate("insert into students (name, age) values ('Test1',13)", Statement.NO_GENERATED_KEYS);
+	i = stmt.executeUpdate("insert into people (name, age) values ('Test1',13)", Statement.NO_GENERATED_KEYS);
 	if (i == -1)
 		return "FAIL";
 	rs = stmt.getGeneratedKeys();
 	if (rs != null)
 		return "FAIL";
 
-	i = stmt.executeUpdate("insert into students (name, age) values ('Test2',133)");
+	i = stmt.executeUpdate("insert into people (name, age) values ('Test2',133)");
 	if (i == -1)
 		return "FAIL";
 	rs = stmt.getGeneratedKeys();
@@ -364,7 +370,7 @@ function getGeneratedKeys_test() {
 		return "FAIL";
 
 	/* the correct call */
-	i = stmt.executeUpdate("insert into students (name, age) values ('Test1',13)", Statement.RETURN_GENERATED_KEYS);
+	i = stmt.executeUpdate("insert into people (name, age) values ('Test1',13)", Statement.RETURN_GENERATED_KEYS);
 	if (i == -1)
 		return "FAIL";
 	rs = stmt.getGeneratedKeys();
@@ -380,7 +386,7 @@ function getGeneratedKeys_test() {
 function getResultSet_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -388,7 +394,7 @@ function getResultSet_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	result = stmt.executeQuery("select * from students");	
+	result = stmt.executeQuery("select * from people");	
 	if (result == null)
 		return "FAIL";
 
@@ -401,7 +407,7 @@ function getResultSet_test() {
 function getUpdateCount_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -409,7 +415,7 @@ function getUpdateCount_test() {
 	if (stmt == null)
 		return "FAIL";
 	
-	result = stmt.executeUpdate("update students set age = 24 where name = 'Mihai'");
+	result = stmt.executeUpdate("update people set age = 24 where name = 'Mihai'");
 	if (result == -1)
 		return "FAIL";
 
@@ -422,7 +428,7 @@ function getUpdateCount_test() {
 function getConnection_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -430,7 +436,7 @@ function getConnection_test() {
 	if (stmt == null)
 		return "FAIL";
 	
-	result = stmt.executeQuery("select * from students");
+	result = stmt.executeQuery("select * from people");
 	if (result == -1)
 		return "FAIL";
 
@@ -443,7 +449,7 @@ function getConnection_test() {
 function preparedStatement_getConnection_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -466,11 +472,11 @@ function preparedStatement_getConnection_test() {
 function preparedStatement_getGeneratedKeys_test() {
 	var conn, stmt, rs;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
-	stmt = conn.prepareStatement("insert into students (age, name) values (?,?)", Statement.RETURN_GENERATED_KEYS);
+	stmt = conn.prepareStatement("insert into people (age, name) values (?,?)", Statement.RETURN_GENERATED_KEYS);
 	if (stmt == null)
 		return "FAIL";
 
@@ -497,7 +503,7 @@ function preparedStatement_getGeneratedKeys_test() {
 function preparedStatement_getResultSet_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -524,11 +530,11 @@ function preparedStatement_getResultSet_test() {
 function preparedStatement_getUpdateCount_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
-	stmt = conn.prepareStatement("update students set age = ? where name = ?");
+	stmt = conn.prepareStatement("update people set age = ? where name = ?");
 	if (stmt == null)
 		return "FAIL";
 
@@ -550,7 +556,7 @@ function preparedStatement_getUpdateCount_test() {
 function simpleStatementResult_test() {
 	var conn, stmt;
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 	
@@ -558,7 +564,7 @@ function simpleStatementResult_test() {
 	if(stmt == null)
 		return "FAIL";
 
-	result = stmt.executeQuery("select * from students");
+	result = stmt.executeQuery("select * from people");
 	if (result == null)
 		return "FAIL";
 
@@ -608,12 +614,12 @@ function preparedStatementResult_test() {
 	var conn, stmt, age, name;
 	var studentName = "Cristina";
 
-	conn = DriverManager.getConnection("postgresql://127.0.0.1/licenta", "claudiu", "1234%asd");
+	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 
 	// check for a number
-	stmt = conn.prepareStatement("select age from students where name = ?");
+	stmt = conn.prepareStatement("select age from people where name = ?");
 	if (stmt == null)
 		return "FAIL";
 	if (stmt.setString(1, studentName) == false)
@@ -631,7 +637,7 @@ function preparedStatementResult_test() {
 		return "FAIL";
 
 	//check for a string
-	stmt = conn.prepareStatement("select name from students where age = ?");
+	stmt = conn.prepareStatement("select name from people where age = ?");
 	if (stmt == null)
 		return "FAIL";
 
@@ -657,7 +663,7 @@ function preparedStatementResult_test() {
 	return "FAIL";
 }
 
-function foo() {
+function test() {
 	//integration_test();
 	println("[Test  1] Testing connection ......................................... " + connection_test());
 	println("[Test  2] Testing createStatement .................................... " + createStatement_test());
@@ -683,4 +689,4 @@ function foo() {
 	return 0;
 }
 
-foo();
+test();
