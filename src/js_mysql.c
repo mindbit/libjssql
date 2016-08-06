@@ -17,7 +17,7 @@
 
 #define _GNU_SOURCE
 #include <stdio.h>
-#include <mysql/mysql.h>
+#include <mysql.h>
 #include <assert.h>
 #include "js_mysql.h"
 

@@ -1,5 +1,7 @@
 *~
 *.o
+*.lo
+*.la
 *.swp
 Makefile
 Makefile.in
@@ -22,8 +24,5 @@ Makefile.in
 /missing
 /src/.deps/
 /src/.libs/
-/src/js_common.lo
-/src/js_sql.lo
-/src/js_utils.lo
-/src/libjssql.la
+/src/test
 /stamp-h1

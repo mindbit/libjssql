@@ -15,8 +15,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef _JS_MYSQL_H
-#define _JS_MYSQL_H
+#ifndef _JS_POSTGRES_H
+#define _JS_POSTGRES_H
 
 #include <libpq-fe.h>
 #include "js_sql.h"

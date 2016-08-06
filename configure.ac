@@ -17,7 +17,7 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
-LT_INIT([disable-shared])
+LT_INIT
 AC_SUBST(MKDIR_P)
 
 
@@ -120,6 +120,9 @@ AC_CHECK_LIB([jsmisc],[__js_log])
 
 AX_LIB_MYSQL([4.1.0])
 AM_CONDITIONAL(HAVE_MYSQL, test x$found_mysql = xyes)
+if test -z "$found_mysql" ; then
+    found_mysql=no
+fi
 
 #
 # test for postgres
@@ -127,6 +130,9 @@ AM_CONDITIONAL(HAVE_MYSQL, test x$found_mysql = xyes)
 
 AX_LIB_POSTGRESQL
 AM_CONDITIONAL(HAVE_POSTGRESQL, test x$found_postgresql = xyes)
+if test -z "$found_postgresql" ; then
+    found_postgresql=no
+fi
 
 #
 # Debug mode
@@ -146,10 +152,11 @@ AS_IF([test "x$enable_debug" = "xyes"], [
 #
 
 echo >&AS_MESSAGE_FD
-echo "Configuration summary:" >&AS_MESSAGE_FD
-echo "MySQL support: $found_mysql " >&AS_MESSAGE_FD
-echo "PostgreSQL support: $found_postgresql" >&AS_MESSAGE_FD
-echo "Debugging support: $enable_debug" >&AS_MESSAGE_FD
+echo "Configuration summary" >&AS_MESSAGE_FD
+echo "---------------------" >&AS_MESSAGE_FD
+echo "MySQL support ........ $found_mysql " >&AS_MESSAGE_FD
+echo "PostgreSQL support ... $found_postgresql" >&AS_MESSAGE_FD
+echo "Debugging support .... $enable_debug" >&AS_MESSAGE_FD
 echo >&AS_MESSAGE_FD
 
 AC_CONFIG_FILES([
