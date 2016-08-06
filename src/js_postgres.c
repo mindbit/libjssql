@@ -163,20 +163,17 @@ static int get_plen(char *nativeSQL)
  */
 static void postgres_pstmt_conversion(char *dest, char *source)
 {
-	int i;
-	i = 1;
+	int i = 1;
 
+	// FIXME what about literal '?' ... should it be converted?
 	while (*source) {
 		if ((*source) == '?') {
 			*dest++ = '$';
-			char *nr = my_itoa(i);
-			int j, len;
-			len = strlen(nr);
-			for (j = 0; j < len; j++)
-				*dest++ = nr[j];
-			i++;
+			// FIXME calculate remaining room in dest and pass to sprintf
+			int len = snprintf(dest, 12, "%d", i++);
+			// FIXME check len against remaining room
+			dest += len;
 			source++;
-			free(nr);
 		} else {
 			*dest++ = *source++;
 		}

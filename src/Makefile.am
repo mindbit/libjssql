@@ -3,7 +3,7 @@
 #
 
 lib_LTLIBRARIES = libjssql.la
-libjssql_la_SOURCES = js_sql.c js_utils.c js_common.c
+libjssql_la_SOURCES = js_sql.c js_common.c
 libjssql_la_LIBADD = $(LIBS)
 libjssql_la_LDFLAGS = $(LDFLAGS) -version-info 1
 include_HEADERS = js_sql.h
