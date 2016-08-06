@@ -20,7 +20,7 @@
 
 #include "js_sql.h"
 #include "js_common.h"
- 
+
 JSBool JS_MysqlConstructAndRegister(JSContext *cx, JSObject *global);
 
 #endif

@@ -45,14 +45,14 @@ void reportError(JSContext *cx, const char *message, JSErrorReport *report)
 static JSBool gettimeoftheday(JSContext *cx, unsigned argc, jsval *vp)
 {
 	struct timeval t;
-    double elapsedTime;
-    jsval rval;
+	double elapsedTime;
+	jsval rval;
 
-    // start timer
-    gettimeofday(&t, NULL);
-    elapsedTime = t.tv_sec * 1000000 + t.tv_usec;
+	// start timer
+	gettimeofday(&t, NULL);
+	elapsedTime = t.tv_sec * 1000000 + t.tv_usec;
 
-	rval = JS_NumberValue(elapsedTime);;	
+	rval = JS_NumberValue(elapsedTime);;
 
 	JS_SET_RVAL(cx, vp, rval);
 	return JS_TRUE;
@@ -139,7 +139,8 @@ static JSBool js_dump(JSContext *cx, unsigned argc, jsval *vp)
 	return JS_TRUE;
 }
 
-static int run_test(char *source, JSContext *cx, JSObject *global) {
+static int run_test(char *source, JSContext *cx, JSObject *global)
+{
 	int fd;
 	void *buf;
 	off_t len;
@@ -147,7 +148,7 @@ static int run_test(char *source, JSContext *cx, JSObject *global) {
 	fd = open(source, O_RDONLY, 0);
 	if (fd < 0)
 		return -1;
-	
+
 	len = lseek(fd, 0, SEEK_END);
 	buf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
 
@@ -155,7 +156,7 @@ static int run_test(char *source, JSContext *cx, JSObject *global) {
 	uint lineno = 0;
 
 	JS_EvaluateScript(cx, global, buf, len, "noname", lineno, &rval);
-	
+
 	munmap(buf, len);
 	close(fd);
 	if (JSVAL_IS_INT(rval))
@@ -227,7 +228,7 @@ int main(int argc, const char *argv[])
 
 #ifdef HAVE_POSTGRESQL
 	printf ("\n[Running postgresql tests]\n");
-	JS_PostgresConstructAndRegister(cx, global);	
+	JS_PostgresConstructAndRegister(cx, global);
 	ret_postgres = run_test("test_postgres.js", cx, global);
 	printf("----------------------------------------------------\n");
 	printf("\n%s: test_postgres\n\n", (ret_postgres == 0)? "PASS" : "FAIL");
@@ -242,5 +243,4 @@ int main(int argc, const char *argv[])
 	JS_ShutDown();
 
 	return ret_mysql && ret_postgres;
-
 }

@@ -61,7 +61,7 @@ static void clear_statement(struct prepared_statement *pstmt)
 	/* close the statement */
 	mysql_stmt_free_result(pstmt->stmt);
 	mysql_stmt_close(pstmt->stmt);
-	
+
 	/* clear the results*/
 	for (i = 0; i < pstmt->r_len; i++)
 		if (pstmt->r_bind[i].buffer) {
@@ -70,8 +70,6 @@ static void clear_statement(struct prepared_statement *pstmt)
 		}
 	free(pstmt->r_bind);
 	pstmt->r_bind = NULL;
-
-
 
 	free(pstmt);
 	pstmt = NULL;
@@ -83,7 +81,8 @@ static void clear_statement(struct prepared_statement *pstmt)
  * @cx: JavaScript context
  * @obj: object
  */
-static void MysqlGeneratedKeys_finalize(JSContext *cx, JSObject *obj) {
+static void MysqlGeneratedKeys_finalize(JSContext *cx, JSObject *obj)
+{
 	struct generated_keys *priv = (struct generated_keys *)JS_GetPrivate(obj);
 
 	if (priv) {
@@ -104,7 +103,7 @@ static JSBool MysqlGeneratedKeys_getNumber(JSContext *cx, unsigned argc, jsval *
 {
 	jsval this = JS_THIS(cx, vp);
 	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	
+
 	if (k)
 		JS_SET_RVAL(cx, vp, JS_NumberValue((double)k->last_insert_id));
 	else
@@ -162,7 +161,7 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 	jsval conn;
 
 	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(obj), "getConnection",
-						argc, vp, &conn)) {
+				argc, vp, &conn)) {
 		ret = JS_FALSE;
 		JS_Log(JS_LOG_ERR, "Failed to call getConnection\n");
 		goto out;
@@ -175,7 +174,7 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 	}
 
 	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(conn), "nativeSQL", 1,
-							nativeSQL_argv, &nativeSQL_jsv)) {
+				nativeSQL_argv, &nativeSQL_jsv)) {
 		ret = JS_FALSE;
 		JS_Log(JS_LOG_ERR, "Failed to call nativeSQL\n");
 		goto out;
@@ -224,7 +223,7 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 		free(pstmt);
 		pstmt = NULL;
 		ret = JS_FALSE;
-		
+
 		goto out;
 	}
 
@@ -435,7 +434,8 @@ static JSFunctionSpec MysqlPreparedResultSet_functions[] = {
  * @cx: JavaScript context
  * @obj: object
  */
-static void MysqlPreparedStatement_finalize(JSContext *cx, JSObject *obj) {
+static void MysqlPreparedStatement_finalize(JSContext *cx, JSObject *obj)
+{
 	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(obj);
 
 	if (pstmt)
@@ -493,7 +493,7 @@ static JSBool prepared_statement_get_result_set(JSContext *cx, struct prepared_s
 	}
 
 	*rval = OBJECT_TO_JSVAL(robj);
-	
+
 out:
 	return JS_TRUE;
 }
@@ -511,8 +511,8 @@ static JSBool MysqlStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
 
 	if (argc > 0) {
 		/* if there is an old statement clear the memory */
-		struct prepared_statement *pstmt = 
-				(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+		struct prepared_statement *pstmt =
+			(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 		if (pstmt)
 			clear_statement(pstmt);
 
@@ -546,8 +546,8 @@ static JSBool MysqlStatement_executeQuery(JSContext *cx, unsigned argc, jsval *v
 	/* if it is a simple statement set the SQL command*/
 	if (argc == 1) {
 		/* if there is an old statement clear the memory */
-		struct prepared_statement *pstmt = 
-				(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+		struct prepared_statement *pstmt =
+			(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 		if (pstmt)
 			clear_statement(pstmt);
 
@@ -583,8 +583,8 @@ static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *
 	/* if it is a simple statement set the SQL command*/
 	if (argc > 0) {
 		/* if there is an old statement clear the memory */
-		struct prepared_statement *pstmt = 
-				(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+		struct prepared_statement *pstmt =
+			(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
 		if (pstmt)
 			clear_statement(pstmt);
 
@@ -602,7 +602,7 @@ static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *
 
 	if (!prepared_statement_execute(cx, pstmt))
 		goto out;
-	
+
 	my_ulonglong rows = mysql_stmt_affected_rows(pstmt->stmt);
 	rval = JS_NumberValue(rows);
 
@@ -843,7 +843,8 @@ static JSClass MysqlPreparedStatement_class = {
  * @cx: JavaScript context
  * @obj: object
  */
-static void MysqlConnection_finalize(JSContext *cx, JSObject *obj) {
+static void MysqlConnection_finalize(JSContext *cx, JSObject *obj)
+{
 	MYSQL *mysql = (MYSQL *)JS_GetPrivate(obj);
 
 	if (mysql) {

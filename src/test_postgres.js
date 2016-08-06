@@ -8,23 +8,23 @@ function comparison_test() {
 	var t1, t2;
 	var n = 100000;
 	var simple_statements = [
-							"select * from people",
-							"select * from people where age > -1",
-							"select age from people where name = 'Test' AND age < 30"		
-							];
+		"select * from people",
+		"select * from people where age > -1",
+		"select age from people where name = 'Test' AND age < 30"
+	];
 
 	var prepared_parameters = ["10", "20"];
 	var prepared_statements = [
-								"select * from people where age < ?",
-								"select * from people where age > ? and age < ?",
-								"select age from people where name = 'Test' AND age < ?"		
-								];
+		"select * from people where age < ?",
+		"select * from people where age > ? and age < ?",
+		"select age from people where name = 'Test' AND age < ?"
+	];
 	t1 = gettimeoftheday();
 	var conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
 	var stmt = conn.createStatement(); //create simple stmt
-	
+
 	var pstmt = [];
 	for (i = 0; i < 3; i++) {	//create prepared stmt
 		pstmt[i] = conn.prepareStatement(prepared_statements[i]);
@@ -46,7 +46,7 @@ function comparison_test() {
 	}
 
 	t2 = gettimeoftheday();
-	
+
 	print("Time: ");
 	println(t2 - t1);
 
@@ -131,7 +131,7 @@ function createStatement_test() {
 	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
-	
+
 	stmt = conn.createStatement();
 	if (stmt == null)
 		return "FAIL";
@@ -145,7 +145,7 @@ function execute_test() {
 	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
-	
+
 	stmt = conn.createStatement();
 
 	if (stmt.execute("BEGIN") == false)
@@ -160,7 +160,7 @@ function executeQuery_test() {
 	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
-	
+
 	stmt = conn.createStatement();
 	if(stmt == null)
 		return "FAIL";
@@ -178,11 +178,11 @@ function executeUpdate_test() {
 	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
-	
+
 	stmt = conn.createStatement();
 	if (stmt == null)
 		return "FAIL";
-	
+
 	ret = stmt.executeUpdate("update people set age = 21 where name = 'Mihai'");
 	if (ret == -1)
 		return "FAIL";
@@ -250,11 +250,11 @@ function preparedStatement_execute_test() {
 
 	if (stmt.setString(1, "Test") == false)
 		return "FAIL";
-	
+
 	if (stmt.execute() == false)
 		return "FAIL";
 	else
-	 	return "PASS";
+		return "PASS";
 }
 
 function preparedStatement_executeQuery_test() {
@@ -273,12 +273,12 @@ function preparedStatement_executeQuery_test() {
 
 	if (stmt.setString(1, "Test") == false)
 		return "FAIL";
-	
+
 	result = stmt.executeQuery();
 	if (result == null)
 		return "FAIL";
 	else
-	 	return "PASS";
+		return "PASS";
 }
 
 function preparedStatement_executeUpdate_test() {
@@ -297,16 +297,16 @@ function preparedStatement_executeUpdate_test() {
 
 	if (stmt.setString(2, "Mihai") == false)
 		return "FAIL";
-	
+
 	if (stmt.executeUpdate() == -1)
 		return "FAIL";
 	else
-	 	return "PASS";
+		return "PASS";
 }
 
 function compareTwoObjects(x, y) {
 	/**
-	 * This function was copied from 
+	 * This function was copied from
 	 * http://stackoverflow.com/questions/1068834/object-comparison-in-javascript
 	 */
 	if ( x === y ) return true;
@@ -353,7 +353,7 @@ function getGeneratedKeys_test() {
 	stmt = conn.createStatement();
 	if (stmt == null)
 		return "FAIL";
-	
+
 	/* sanity checks*/
 	i = stmt.executeUpdate("insert into people (name, age) values ('Test1',13)", Statement.NO_GENERATED_KEYS);
 	if (i == -1)
@@ -394,7 +394,7 @@ function getResultSet_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	result = stmt.executeQuery("select * from people");	
+	result = stmt.executeQuery("select * from people");
 	if (result == null)
 		return "FAIL";
 
@@ -414,7 +414,7 @@ function getUpdateCount_test() {
 	stmt = conn.createStatement();
 	if (stmt == null)
 		return "FAIL";
-	
+
 	result = stmt.executeUpdate("update people set age = 24 where name = 'Mihai'");
 	if (result == -1)
 		return "FAIL";
@@ -435,7 +435,7 @@ function getConnection_test() {
 	stmt = conn.createStatement();
 	if (stmt == null)
 		return "FAIL";
-	
+
 	result = stmt.executeQuery("select * from people");
 	if (result == -1)
 		return "FAIL";
@@ -481,11 +481,11 @@ function preparedStatement_getGeneratedKeys_test() {
 		return "FAIL";
 
 	if (stmt.setNumber(1, 13) == false)
-	 	return "FAIL";
+		return "FAIL";
 
 	if (stmt.setString(2, "Test21") == false)
 		return "FAIL";
-	
+
 	i = stmt.executeUpdate();
 	if (i == -1)
 		return "FAIL";
@@ -516,8 +516,8 @@ function preparedStatement_getResultSet_test() {
 
 	if (stmt.setString(1, "Test") == false)
 		return "FAIL";
-	
-	result = stmt.executeQuery();	
+
+	result = stmt.executeQuery();
 	if (result == null)
 		return "FAIL";
 
@@ -543,7 +543,7 @@ function preparedStatement_getUpdateCount_test() {
 
 	if (stmt.setString(2, "Mihai") == false)
 		return "FAIL";
-	
+
 	result = stmt.executeUpdate();
 	if (result == -1)
 		return "FAIL";
@@ -559,7 +559,7 @@ function simpleStatementResult_test() {
 	conn = getPostgresConnection();
 	if (conn == null)
 		return "FAIL";
-	
+
 	stmt = conn.createStatement();
 	if(stmt == null)
 		return "FAIL";
@@ -582,7 +582,7 @@ function simpleStatementResult_test() {
 			result.getNumber(2) != null ||
 			result.getString(3) == null)
 			return "FAIL";
-	} 
+	}
 
 	result.first();
 
@@ -594,7 +594,7 @@ function simpleStatementResult_test() {
 		// print(result.getString(2));
 		// print(" | Age: ");
 		// println(result.getNumber(3));
-	} 
+	}
 
 	//check with column label
 	result.first();
@@ -624,14 +624,14 @@ function preparedStatementResult_test() {
 		return "FAIL";
 	if (stmt.setString(1, studentName) == false)
 		return "FAIL";
-	
+
 	result = stmt.executeQuery();
 	if (result == null)
 		return "FAIL";
 
 	if (result.next() == false)
 		return "FAIL";
-	
+
 	age = result.getNumber(1);	//use column index
 	if (age == null)
 		return "FAIL";
@@ -658,8 +658,8 @@ function preparedStatementResult_test() {
 			return "FAIL";
 		if (name.localeCompare(studentName) == 0)
 			return "PASS";
-	} 
-	
+	}
+
 	return "FAIL";
 }
 

@@ -18,14 +18,14 @@
 #include <jsmisc.h>
 #include "js_common.h"
 
- /**
-  * getConnection - search for a connection property of an object
-  * and return the reference of the property
-  * @cx: JavaScript context
-  * @vp: the return value will be the connection property
-  *
-  * Returns JS_TRUE on success and JS_FALSE on failure
-  */
+/**
+ * getConnection - search for a connection property of an object
+ * and return the reference of the property
+ * @cx: JavaScript context
+ * @vp: the return value will be the connection property
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
 JSBool getConnection(JSContext *cx, jsval *vp)
 {
 	jsval rval = JSVAL_NULL;
@@ -37,15 +37,15 @@ JSBool getConnection(JSContext *cx, jsval *vp)
 	return ret;
 }
 
- /**
-  * createStatement - create a Statement object
-  * @cx: JavaScript context
-  * @vp: the return value will be the created object
-  * @class: the class of the object
-  * @functions: the functions assigned to the object
-  *
-  * Returns JS_TRUE on success and JS_FALSE on failure
-  */
+/**
+ * createStatement - create a Statement object
+ * @cx: JavaScript context
+ * @vp: the return value will be the created object
+ * @class: the class of the object
+ * @functions: the functions assigned to the object
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
 JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec *functions)
 {
 	JSBool ret = JS_TRUE;
@@ -59,9 +59,9 @@ JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec 
 		goto out;
 	}
 
-	JS_DefineProperty(cx, obj, "connection", 
-					JS_THIS(cx, vp), NULL, NULL, 
-					JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
+	JS_DefineProperty(cx, obj, "connection",
+			JS_THIS(cx, vp), NULL, NULL,
+			JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
 
 	if (JS_DefineFunctions(cx, obj, functions) == JS_FALSE) {
 		ret = JS_FALSE;
@@ -77,14 +77,14 @@ out:
 	return ret;
 }
 
- /**
-  * nativeSQL - get the first parameter and convert it to string
-  * @cx: JavaScript context
-  * @argc: arguments' number
-  * @vp: pointer where the value will be stored
-  *
-  * Returns JS_TRUE on success and JS_FALSE on failure
-  */
+/**
+ * nativeSQL - get the first parameter and convert it to string
+ * @cx: JavaScript context
+ * @argc: arguments' number
+ * @vp: pointer where the value will be stored
+ *
+ * Returns JS_TRUE on success and JS_FALSE on failure
+ */
 JSBool nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
 {
 	if (argc != 1) {
@@ -99,6 +99,6 @@ JSBool nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
 	}
 
 	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-	
+
 	return JS_FALSE;
 }

@@ -21,6 +21,6 @@
 #include <jsapi.h>
 
 JSBool getConnection(JSContext *cx, jsval *vp);
-JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec *functions);       
+JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec *functions);
 
 #endif

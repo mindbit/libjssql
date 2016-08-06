@@ -148,8 +148,8 @@ JSBool JS_SqlInit(JSContext *cx, JSObject *global)
 	if (drivers == NULL)
 		return JS_FALSE;
 
-	if (JS_DefineProperty(cx, obj, "drivers", OBJECT_TO_JSVAL(drivers), NULL, NULL, 
-		JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
+	if (JS_DefineProperty(cx, obj, "drivers", OBJECT_TO_JSVAL(drivers), NULL, NULL,
+				JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
 		JS_Log(JS_LOG_ERR, "Failed define drivers property\n");
 		return JS_FALSE;
 	}
@@ -161,14 +161,14 @@ JSBool JS_SqlInit(JSContext *cx, JSObject *global)
 		return JS_FALSE;
 	}
 
-	if (JS_DefineProperty(cx, statement, "RETURN_GENERATED_KEYS", JSVAL_ONE, NULL, NULL, 
-		JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
+	if (JS_DefineProperty(cx, statement, "RETURN_GENERATED_KEYS", JSVAL_ONE, NULL, NULL,
+				JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
 		JS_Log(JS_LOG_ERR, "Failed define RETURN_GENERATED_KEYS property\n");
 		return JS_FALSE;
 	}
 
-	if (JS_DefineProperty(cx, statement, "NO_GENERATED_KEYS", JSVAL_ZERO, NULL, NULL, 
-		JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
+	if (JS_DefineProperty(cx, statement, "NO_GENERATED_KEYS", JSVAL_ZERO, NULL, NULL,
+				JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
 		JS_Log(JS_LOG_ERR, "Failed define NO_GENERATED_KEYS property\n");
 		return JS_FALSE;
 	}
