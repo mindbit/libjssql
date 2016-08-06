@@ -263,7 +263,7 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd, int autoGe
 }
 
 /**
- * PostgresResultSet_get - Retrieves the value of the designated column in the
+ * PgsqlResultSet_get - Retrieves the value of the designated column in the
  * current row of this ResultSet object as a String. (this is an internal function)
  * @cx: JavaScript context
  * @argc: arguments' number
@@ -272,7 +272,7 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd, int autoGe
  * Returns the number on success and JS_NULL on failure
  */
 static inline JSBool
-PostgresResultSet_get(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlResultSet_get(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -374,7 +374,7 @@ out:
 }
 
 /**
- * PostgresResultSet_getNumber - Retrieves the value of the designated column in the
+ * PgsqlResultSet_getNumber - Retrieves the value of the designated column in the
  * current row of this ResultSet object as a number.
  * @cx: JavaScript context
  * @argc: arguments' number
@@ -382,9 +382,9 @@ out:
  *
  * Returns the number on success and JS_NULL on failure
  */
-static JSBool PostgresResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool PgsqlResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
 {
-	if (!PostgresResultSet_get(cx, argc, vp))
+	if (!PgsqlResultSet_get(cx, argc, vp))
 		return JS_TRUE;
 
 	if (!JSVAL_IS_NUMBER(*vp)) {
@@ -396,7 +396,7 @@ static JSBool PostgresResultSet_getNumber(JSContext *cx, unsigned argc, jsval *v
 }
 
 /**
- * PostgresResultSet_getString - Retrieves the value of the designated column in the
+ * PgsqlResultSet_getString - Retrieves the value of the designated column in the
  * current row of this ResultSet object as a String.
  * @cx: JavaScript context
  * @argc: arguments' number
@@ -404,22 +404,22 @@ static JSBool PostgresResultSet_getNumber(JSContext *cx, unsigned argc, jsval *v
  *
  * Returns the string on success and JS__NULL on failure
  */
-static JSBool PostgresResultSet_getString(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool PgsqlResultSet_getString(JSContext *cx, unsigned argc, jsval *vp)
 {
-	PostgresResultSet_get(cx, argc, vp);
+	PgsqlResultSet_get(cx, argc, vp);
 
 	return JS_TRUE;
 }
 
 /**
- * PostgresResultSet_next - Moves the cursor froward one row from its current position.
+ * PgsqlResultSet_next - Moves the cursor froward one row from its current position.
  * @cx: JavaScript context
  * @argc: arguments' number
  * @vp: arguments' values
  *
  * Returns JS_TRUE on success and JS_FALSE on failure
  */
-static JSBool PostgresResultSet_next(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool PgsqlResultSet_next(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -451,14 +451,14 @@ out:
 }
 
 /**
- * PostgresResultSet_first - Moves the cursor to the first row in this ResultSet object.
+ * PgsqlResultSet_first - Moves the cursor to the first row in this ResultSet object.
  * @cx: JavaScript context
  * @argc: arguments' number
  * @vp: arguments' values
  *
  * Returns JS_TRUE on success and JS_FALSE on failure
  */
-static JSBool PostgresResultSet_first(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool PgsqlResultSet_first(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -484,14 +484,14 @@ out:
 }
 
 /**
- * PostgresResultSet_last - Moves the cursor to the last row in this ResultSet object.
+ * PgsqlResultSet_last - Moves the cursor to the last row in this ResultSet object.
  * @cx: JavaScript context
  * @argc: arguments' number
  * @vp: arguments' values
  *
  * Returns JS_TRUE on success and JS_FALSE on failure
  */
-static JSBool PostgresResultSet_last(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool PgsqlResultSet_last(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -517,11 +517,11 @@ out:
 }
 
 /**
- * PostgresResultSet_finalize - cleanup function for ResultSet objects
+ * PgsqlResultSet_finalize - cleanup function for ResultSet objects
  * @cx: JavaScript context
  * @obj: object
  */
-static void PostgresResultSet_finalize(JSContext *cx, JSObject *obj)
+static void PgsqlResultSet_finalize(JSContext *cx, JSObject *obj)
 {
 	struct statement *stmt = (struct statement *)JS_GetPrivate(obj);
 
@@ -531,8 +531,8 @@ static void PostgresResultSet_finalize(JSContext *cx, JSObject *obj)
 	}
 }
 
-static JSClass PostgresResultSet_class = {
-	"PostgresResultSet",		//name of the class
+static JSClass PgsqlResultSet_class = {
+	"PgsqlResultSet",		//name of the class
 	JSCLASS_HAS_PRIVATE,		//flags
 	JS_PropertyStub,		//addProperty (default value JS_PropertyStrub)
 	JS_PropertyStub,		//delProperty (default)
@@ -541,15 +541,15 @@ static JSClass PostgresResultSet_class = {
 	JS_EnumerateStub,		//enumerate (default)
 	JS_ResolveStub,			//resolve -lazy properties(default)
 	JS_ConvertStub,			//conversion to primitive value (default)
-	PostgresResultSet_finalize,	//cleanup
+	PgsqlResultSet_finalize,	//cleanup
 };
 
-static JSFunctionSpec PostgresResultSet_functions[] = {
-	JS_FS("getNumber", PostgresResultSet_getNumber, 1, 0),
-	JS_FS("getString", PostgresResultSet_getString, 1, 0),
-	JS_FS("next", PostgresResultSet_next, 0, 0),
-	JS_FS("first", PostgresResultSet_first, 0, 0),
-	JS_FS("last", PostgresResultSet_last, 0, 0),
+static JSFunctionSpec PgsqlResultSet_functions[] = {
+	JS_FS("getNumber", PgsqlResultSet_getNumber, 1, 0),
+	JS_FS("getString", PgsqlResultSet_getString, 1, 0),
+	JS_FS("next", PgsqlResultSet_next, 0, 0),
+	JS_FS("first", PgsqlResultSet_first, 0, 0),
+	JS_FS("last", PgsqlResultSet_last, 0, 0),
 	JS_FS_END
 };
 
@@ -567,7 +567,7 @@ statement_get_result_set(JSContext *cx, struct statement *stmt, jsval *vp)
 	JSBool ret = JS_TRUE;
 	jsval rval = JSVAL_NULL;
 
-	JSObject *obj = JS_NewObject(cx, &PostgresResultSet_class, NULL, NULL);
+	JSObject *obj = JS_NewObject(cx, &PgsqlResultSet_class, NULL, NULL);
 	if (obj == NULL) {
 		ret = JS_FALSE;
 		JS_ReportError(cx, "Failed to create a new object\n");
@@ -577,10 +577,10 @@ statement_get_result_set(JSContext *cx, struct statement *stmt, jsval *vp)
 
 	JS_SetPrivate(obj, stmt);
 
-	if (JS_DefineFunctions(cx, obj, PostgresResultSet_functions) == JS_FALSE) {
+	if (JS_DefineFunctions(cx, obj, PgsqlResultSet_functions) == JS_FALSE) {
 		ret = JS_FALSE;
-		JS_ReportError(cx, "Failed to define functions for PostgresResultSet\n");
-		JS_Log(JS_LOG_ERR, "Failed to define functions for PostgresResultSet\n");
+		JS_ReportError(cx, "Failed to define functions for PgsqlResultSet\n");
+		JS_Log(JS_LOG_ERR, "Failed to define functions for PgsqlResultSet\n");
 		goto out;
 	}
 
@@ -719,7 +719,7 @@ out:
 }
 
 /**
- * Postgres_setStatement - Creates a new statement using the SQL command and saves
+ * Pgsql_setStatement - Creates a new statement using the SQL command and saves
  * it in the Statement's objects properties.
  * @cx: the JavaScript context
  * @argc: arguments number
@@ -729,7 +729,7 @@ out:
  * Returns JS_TRUE on success and JS_FALSE on failure
  */
 static JSBool
-Postgres_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
+Pgsql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 {
 	JSBool ret = JS_TRUE;
 	jsval nativeSQL_argv[] = {JS_ARGV(cx, vp)[0]};
@@ -853,7 +853,7 @@ execute_statement(JSContext *cx, unsigned argc, jsval *vp, struct statement *stm
 }
 
 /**
- * PostgresStatement_execute - Executes the given SQL statement,
+ * PgsqlStatement_execute - Executes the given SQL statement,
  * which may return multiple results. It returns false on error or
  * true on success.
  * @cx: JavaScript context
@@ -862,7 +862,7 @@ execute_statement(JSContext *cx, unsigned argc, jsval *vp, struct statement *stm
  *
  * Returns JS_TRUE on success and JS_FALSE on failure.
  */
-static JSBool PostgresStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
+static JSBool PgsqlStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
 {
 	JSBool ret = JS_TRUE;
 	/* if it is a simple statement set the SQL command*/
@@ -881,7 +881,7 @@ static JSBool PostgresStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
 		if (stmt)
 			clear_statement(stmt);
 
-		if (Postgres_setStatement(cx, argc, vp, this) == JS_FALSE) {
+		if (Pgsql_setStatement(cx, argc, vp, this) == JS_FALSE) {
 			ret = JS_FALSE;
 			goto out;
 		}
@@ -902,7 +902,7 @@ out:
 }
 
 /**
- * PostgresStatement_executeQuery - Executes the given SQL statement,
+ * PgsqlStatement_executeQuery - Executes the given SQL statement,
  * which returns a single result. On error returns NULL.
  * @cx: JavaScript context
  * @argc: arguments' number
@@ -911,7 +911,7 @@ out:
  * Returns JS_TRUE on success and JS_FALSE on failure and saves the ResultSet in vp.
  */
 static JSBool
-PostgresStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 
@@ -923,7 +923,7 @@ PostgresStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
 		if (stmt)
 			clear_statement(stmt);
 
-		if (Postgres_setStatement(cx, argc, vp, this) == JS_FALSE) {
+		if (Pgsql_setStatement(cx, argc, vp, this) == JS_FALSE) {
 			goto out;
 		}
 	}
@@ -951,7 +951,7 @@ out:
 }
 
 /**
- * PostgresStatement_executeUpdate - Executes the given SQL statement, which may
+ * PgsqlStatement_executeUpdate - Executes the given SQL statement, which may
  * be an INSERT, UPDATE, or DELETE statement or an SQL statement that returns
  * nothing, such as an SQL DDL statement. On error returns -1.
  * @cx: JavaScript context
@@ -962,7 +962,7 @@ out:
  * rows number in vp.
  */
 static JSBool
-PostgresStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	jsval rval = JS_NumberValue(-1);
@@ -980,7 +980,7 @@ PostgresStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
 		if (stmt)
 			clear_statement(stmt);
 
-		if (Postgres_setStatement(cx, argc, vp, this) == JS_FALSE) {
+		if (Pgsql_setStatement(cx, argc, vp, this) == JS_FALSE) {
 			goto out;
 		}
 	}
@@ -1004,7 +1004,7 @@ out:
 }
 
 /**
- * PostgresStatement_getConnection - Executes the given SQL statement,
+ * PgsqlStatement_getConnection - Executes the given SQL statement,
  * which may return multiple results.
  * @cx: JavaScript context
  * @argc: arguments' number
@@ -1013,19 +1013,19 @@ out:
  * Returns JS_TRUE on success and JS_FALSE on failure
  */
 static JSBool
-PostgresStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
 {
 	return getConnection(cx, vp);
 }
 
 /**
- * PostgresStatement_getGeneratedKeys - Returns the generated keys
+ * PgsqlStatement_getGeneratedKeys - Returns the generated keys
  * @cx: JavaScript context
  * @argc: arguments' number
  * @vp: arguments' values
  */
 static JSBool
-PostgresStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 
@@ -1051,13 +1051,13 @@ out:
 }
 
 /**
- * PostgresStatement_getResultSet - Returns the result set
+ * PgsqlStatement_getResultSet - Returns the result set
  * @cx: JavaScript context
  * @argc: arguments' number
  * @vp: arguments' values
  */
 static JSBool
-PostgresStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 
@@ -1078,13 +1078,13 @@ out:
 }
 
 /**
- * PostgresStatement_getUpdateCount - Returns the number of updated rows
+ * PgsqlStatement_getUpdateCount - Returns the number of updated rows
  * @cx: JavaScript context
  * @argc: arguments' number
  * @vp: arguments' values
  */
 static JSBool
-PostgresStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval rval = JS_NumberValue(-1);
 	jsval this = JS_THIS(cx, vp);
@@ -1103,11 +1103,11 @@ out:
 }
 
 /**
- * PostgresStatement_finalize - cleanup function for Statement objects
+ * PgsqlStatement_finalize - cleanup function for Statement objects
  * @cx: JavaScript context
  * @obj: object
  */
-static void PostgresStatement_finalize(JSContext *cx, JSObject *obj)
+static void PgsqlStatement_finalize(JSContext *cx, JSObject *obj)
 {
 	struct statement *stmt = (struct statement *)JS_GetPrivate(obj);
 
@@ -1115,19 +1115,19 @@ static void PostgresStatement_finalize(JSContext *cx, JSObject *obj)
 		clear_statement(stmt);
 }
 
-static JSFunctionSpec PostgresStatement_functions[] = {
-	JS_FS("execute", PostgresStatement_execute, 2, 0),
-	JS_FS("executeQuery", PostgresStatement_executeQuery, 1, 0),
-	JS_FS("executeUpdate", PostgresStatement_executeUpdate, 2, 0),
-	JS_FS("getConnection", PostgresStatement_getConnection, 0, 0),
-	JS_FS("getGeneratedKeys", PostgresStatement_getGeneratedKeys, 0, 0),
-	JS_FS("getResultSet", PostgresStatement_getResultSet, 0, 0),
-	JS_FS("getUpdateCount", PostgresStatement_getUpdateCount, 0, 0),
+static JSFunctionSpec PgsqlStatement_functions[] = {
+	JS_FS("execute", PgsqlStatement_execute, 2, 0),
+	JS_FS("executeQuery", PgsqlStatement_executeQuery, 1, 0),
+	JS_FS("executeUpdate", PgsqlStatement_executeUpdate, 2, 0),
+	JS_FS("getConnection", PgsqlStatement_getConnection, 0, 0),
+	JS_FS("getGeneratedKeys", PgsqlStatement_getGeneratedKeys, 0, 0),
+	JS_FS("getResultSet", PgsqlStatement_getResultSet, 0, 0),
+	JS_FS("getUpdateCount", PgsqlStatement_getUpdateCount, 0, 0),
 	JS_FS_END
 };
 
-static JSClass PostgresStatement_class = {
-	"PostgresStatement",		//name of the class
+static JSClass PgsqlStatement_class = {
+	"PgsqlStatement",		//name of the class
 	JSCLASS_HAS_PRIVATE,		//flags
 	JS_PropertyStub,		//addProperty (default value JS_PropertyStrub)
 	JS_PropertyStub,		//delProperty (default)
@@ -1136,11 +1136,11 @@ static JSClass PostgresStatement_class = {
 	JS_EnumerateStub,		//enumerate (default)
 	JS_ResolveStub,			//resolve -lazy properties(default)
 	JS_ConvertStub,			//conversion to primitive value (default)
-	PostgresStatement_finalize,	//cleanup
+	PgsqlStatement_finalize,	//cleanup
 };
 
 /**
- * PostgresPreparedStatement_set - Generic set parameter function
+ * PgsqlPreparedStatement_set - Generic set parameter function
  * which may return multiple results.
  * @cx: JavaScript context
  * @argc: arguments' number
@@ -1149,7 +1149,7 @@ static JSClass PostgresStatement_class = {
  * Returns JS_TRUE on success and JS_FALSE on failure.
  */
 static inline JSBool
-PostgresPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval this = JS_THIS(cx, vp);
 	struct statement *stmt = (struct statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
@@ -1213,7 +1213,7 @@ out:
 }
 
 /**
- * PostgresPreparedStatement_execute - Executes the given SQL statement,
+ * PgsqlPreparedStatement_execute - Executes the given SQL statement,
  * which may return multiple results.
  * @cx: JavaScript context
  * @argc: arguments' number
@@ -1222,7 +1222,7 @@ out:
  * Returns JS_TRUE on success and JS_FALSE on failure.
  */
 static JSBool
-PostgresPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval ret = JSVAL_TRUE;
 
@@ -1233,7 +1233,7 @@ PostgresPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsval *vp)
 		goto out;
 	}
 
-	ret = BOOLEAN_TO_JSVAL(PostgresPreparedStatement_set(cx, argc, vp));
+	ret = BOOLEAN_TO_JSVAL(PgsqlPreparedStatement_set(cx, argc, vp));
 
 out:
 	JS_SET_RVAL(cx, vp, ret);
@@ -1241,7 +1241,7 @@ out:
 }
 
 /**
- * PostgresPreparedStatement_execute - Executes the given SQL statement,
+ * PgsqlPreparedStatement_execute - Executes the given SQL statement,
  * which may return multiple results.
  * @cx: JavaScript context
  * @argc: arguments' number
@@ -1250,7 +1250,7 @@ out:
  * Returns JS_TRUE on success and JS_FALSE on failure.
  */
 static JSBool
-PostgresPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval ret = JSVAL_TRUE;
 
@@ -1261,28 +1261,28 @@ PostgresPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
 		goto out;
 	}
 
-	ret = BOOLEAN_TO_JSVAL(PostgresPreparedStatement_set(cx, argc, vp));
+	ret = BOOLEAN_TO_JSVAL(PgsqlPreparedStatement_set(cx, argc, vp));
 
 out:
 	JS_SET_RVAL(cx, vp, ret);
 	return JS_TRUE;
 }
 
-static JSFunctionSpec PostgresPreparedStatement_functions[] = {
-	JS_FS("execute", PostgresStatement_execute, 0, 0),
-	JS_FS("executeQuery", PostgresStatement_executeQuery, 0, 0),
-	JS_FS("executeUpdate", PostgresStatement_executeUpdate, 0, 0),
-	JS_FS("getConnection", PostgresStatement_getConnection, 0, 0),
-	JS_FS("getGeneratedKeys", PostgresStatement_getGeneratedKeys, 0, 0),
-	JS_FS("getResultSet", PostgresStatement_getResultSet, 0, 0),
-	JS_FS("getUpdateCount", PostgresStatement_getUpdateCount, 0, 0),
-	JS_FS("setNumber", PostgresPreparedStatement_setNumber, 2, 0),
-	JS_FS("setString", PostgresPreparedStatement_setString, 2, 0),
+static JSFunctionSpec PgsqlPreparedStatement_functions[] = {
+	JS_FS("execute", PgsqlStatement_execute, 0, 0),
+	JS_FS("executeQuery", PgsqlStatement_executeQuery, 0, 0),
+	JS_FS("executeUpdate", PgsqlStatement_executeUpdate, 0, 0),
+	JS_FS("getConnection", PgsqlStatement_getConnection, 0, 0),
+	JS_FS("getGeneratedKeys", PgsqlStatement_getGeneratedKeys, 0, 0),
+	JS_FS("getResultSet", PgsqlStatement_getResultSet, 0, 0),
+	JS_FS("getUpdateCount", PgsqlStatement_getUpdateCount, 0, 0),
+	JS_FS("setNumber", PgsqlPreparedStatement_setNumber, 2, 0),
+	JS_FS("setString", PgsqlPreparedStatement_setString, 2, 0),
 	JS_FS_END
 };
 
-static JSClass PostgresPreparedStatement_class = {
-	"PostgresPreparedStatement",	//name of the class
+static JSClass PgsqlPreparedStatement_class = {
+	"PgsqlPreparedStatement",	//name of the class
 	JSCLASS_HAS_PRIVATE,		//flags
 	JS_PropertyStub,		//addProperty (default value JS_PropertyStrub)
 	JS_PropertyStub,		//delProperty (default)
@@ -1291,11 +1291,11 @@ static JSClass PostgresPreparedStatement_class = {
 	JS_EnumerateStub,		//enumerate (default)
 	JS_ResolveStub,			//resolve -lazy properties(default)
 	JS_ConvertStub,			//conversion to primitive value (default)
-	PostgresStatement_finalize,	//cleanup
+	PgsqlStatement_finalize,	//cleanup
 };
 
 /**
- * PostgresConnection_createStatement - Used to create a Statement object
+ * PgsqlConnection_createStatement - Used to create a Statement object
  * @cx: JavaScript context
  * @argc: number of argumets
  * @vp: arguments array
@@ -1303,14 +1303,14 @@ static JSClass PostgresPreparedStatement_class = {
  * Returns JS_TRUE on success and JS_FALSE on failure.
  */
 static JSBool
-PostgresConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
 {
-	return createStatement(cx, vp, &PostgresStatement_class,
-			PostgresStatement_functions);
+	return createStatement(cx, vp, &PgsqlStatement_class,
+			PgsqlStatement_functions);
 }
 
 /**
- * PostgresConnection_prepareStatement - Used to create a PreparedStatement
+ * PgsqlConnection_prepareStatement - Used to create a PreparedStatement
  * object.
  * @cx: JavaScript context
  * @argc: number of argumets
@@ -1319,7 +1319,7 @@ PostgresConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
  * Returns JS_TRUE on success and JS_FALSE on failure.
  */
 static JSBool
-PostgresConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval rval = JSVAL_NULL;
 
@@ -1328,7 +1328,7 @@ PostgresConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
 		goto out;
 	}
 
-	JSObject *obj = JS_NewObject(cx, &PostgresPreparedStatement_class, NULL, NULL);
+	JSObject *obj = JS_NewObject(cx, &PgsqlPreparedStatement_class, NULL, NULL);
 	if (obj == NULL) {
 		JS_ReportError(cx, "Failed to create a new object\n");
 		JS_Log(JS_LOG_ERR, "Failed to create a new object\n");
@@ -1339,13 +1339,13 @@ PostgresConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
 			JS_THIS(cx, vp), NULL, NULL,
 			JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
 
-	if (JS_DefineFunctions(cx, obj, PostgresPreparedStatement_functions) == JS_FALSE) {
+	if (JS_DefineFunctions(cx, obj, PgsqlPreparedStatement_functions) == JS_FALSE) {
 		JS_ReportError(cx, "Failed to define functions in createStatement\n");
 		JS_Log(JS_LOG_ERR, "Failed to define functions in createStatement\n");
 		goto out;
 	}
 
-	if (Postgres_setStatement(cx, argc, vp, OBJECT_TO_JSVAL(obj)) == JS_FALSE)
+	if (Pgsql_setStatement(cx, argc, vp, OBJECT_TO_JSVAL(obj)) == JS_FALSE)
 		goto out;
 
 	rval = OBJECT_TO_JSVAL(obj);
@@ -1356,7 +1356,7 @@ out:
 }
 
 /**
- * PostgresConnection_nativeSQL - Used to convert SQL commands to native SQL
+ * PgsqlConnection_nativeSQL - Used to convert SQL commands to native SQL
  * @cx: JavaScript context
  * @argc: number of argumets
  * @vp: arguments array
@@ -1365,17 +1365,17 @@ out:
  * value to vp.
  */
 static JSBool
-PostgresConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
+PgsqlConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
 {
 	return nativeSQL(cx, argc, vp);
 }
 
 /**
- * PostgresConnection_finalize - cleanup function for Connection objects
+ * PgsqlConnection_finalize - cleanup function for Connection objects
  * @cx: JavaScript context
  * @obj: object
  */
-static void PostgresConnection_finalize(JSContext *cx, JSObject *obj)
+static void PgsqlConnection_finalize(JSContext *cx, JSObject *obj)
 {
 	PGconn *conn = (PGconn *)JS_GetPrivate(obj);
 
@@ -1383,15 +1383,15 @@ static void PostgresConnection_finalize(JSContext *cx, JSObject *obj)
 		PQfinish(conn);
 }
 
-static JSFunctionSpec PostgresConnection_functions[] = {
-	JS_FS("createStatement", PostgresConnection_createStatement, 0, 0),
-	JS_FS("prepareStatement", PostgresConnection_prepareStatement, 2, 0),
-	JS_FS("nativeSQL", PostgresConnection_nativeSQL, 1, 0),
+static JSFunctionSpec PgsqlConnection_functions[] = {
+	JS_FS("createStatement", PgsqlConnection_createStatement, 0, 0),
+	JS_FS("prepareStatement", PgsqlConnection_prepareStatement, 2, 0),
+	JS_FS("nativeSQL", PgsqlConnection_nativeSQL, 1, 0),
 	JS_FS_END
 };
 
-static JSClass PostgresConnection_class = {
-	"PostgresConnection",		//name of the class
+static JSClass PgsqlConnection_class = {
+	"PgsqlConnection",		//name of the class
 	JSCLASS_HAS_PRIVATE,		//flags
 	JS_PropertyStub,		//addProperty (default value JS_PropertyStrub)
 	JS_PropertyStub,		//delProperty (default)
@@ -1400,18 +1400,18 @@ static JSClass PostgresConnection_class = {
 	JS_EnumerateStub,		//enumerate (default)
 	JS_ResolveStub,			//resolve -lazy properties(default)
 	JS_ConvertStub,			//conversion to primitive value (default)
-	PostgresConnection_finalize,	//cleanup
+	PgsqlConnection_finalize,	//cleanup
 };
 
 /**
- * PostgresDriver_acceptsURL - checks if the URL is a valid one
+ * PgsqlDriver_acceptsURL - checks if the URL is a valid one
  * @cx: JavaScript context
  * @argc: number of argumets
  * @vp: arguments array
  *
  * Returns JS_TRUE on success and JS_FALSE on failure
  */
-static JSBool PostgresDriver_acceptsURL(JSContext * cx, unsigned argc, jsval * vp)
+static JSBool PgsqlDriver_acceptsURL(JSContext * cx, unsigned argc, jsval * vp)
 {
 	char *url = JS_StringToCStr(cx, JS_ARGV(cx, vp)[0]);
 	if (url == NULL) {
@@ -1438,14 +1438,14 @@ out:
 }
 
 /**
- * PostgresDriver_connect - driver's connection function
+ * PgsqlDriver_connect - driver's connection function
  * @cx: JavaScript context
  * @argc: number of argumets
  * @vp: arguments array
  *
  * Returns JS_TRUE on success and JS_FALSE on failure
  */
-static JSBool PostgresDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
+static JSBool PgsqlDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 {
 	JSBool ret = JS_TRUE;
 	jsval rval = JSVAL_NULL;
@@ -1454,7 +1454,7 @@ static JSBool PostgresDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 
 	char *url = JS_StringToCStr(cx, JS_ARGV(cx, vp)[0]);
 	if (url == NULL) {
-		JS_ReportError(cx, "[PostgresDriver_connect] Failed to convert the URL "
+		JS_ReportError(cx, "[PgsqlDriver_connect] Failed to convert the URL "
 				"value to JSString\n");
 		JS_Log(JS_LOG_ERR, "Failed to convert the URL value to JSString\n");
 		goto out_clean;
@@ -1539,7 +1539,7 @@ static JSBool PostgresDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 		goto out_clean;
 	}
 
-	JSObject *retobj = JS_NewObject(cx, &PostgresConnection_class, NULL, NULL);
+	JSObject *retobj = JS_NewObject(cx, &PgsqlConnection_class, NULL, NULL);
 	if (retobj == NULL) {
 		ret = JS_FALSE;
 		JS_ReportError(cx, "Failed to create a new object\n");
@@ -1548,11 +1548,11 @@ static JSBool PostgresDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 	}
 
 	JS_SetPrivate(retobj, connection);
-	if (JS_DefineFunctions(cx, retobj, PostgresConnection_functions) == JS_FALSE) {
+	if (JS_DefineFunctions(cx, retobj, PgsqlConnection_functions) == JS_FALSE) {
 		ret = JS_FALSE;
-		JS_ReportError(cx, "Failed to define functions for the PostgresConnection "
+		JS_ReportError(cx, "Failed to define functions for the PgsqlConnection "
 				"class\n");
-		JS_Log(JS_LOG_ERR, "Failed to define functions for the PostgresConnection class\n");
+		JS_Log(JS_LOG_ERR, "Failed to define functions for the PgsqlConnection class\n");
 		goto out_clean;
 	}
 
@@ -1569,25 +1569,25 @@ out:
 	return ret;
 }
 
-static JSFunctionSpec PostgresDriver_functions[] = {
-	JS_FS("acceptsURL", PostgresDriver_acceptsURL, 1, 0),
-	JS_FS("connect", PostgresDriver_connect, 2, 0),
+static JSFunctionSpec PgsqlDriver_functions[] = {
+	JS_FS("acceptsURL", PgsqlDriver_acceptsURL, 1, 0),
+	JS_FS("connect", PgsqlDriver_connect, 2, 0),
 	JS_FS_END
 };
 
 /**
- * JS_PostgresConstructAndRegister - Constructs a JavaScript object which will
+ * JS_PgsqlConstructAndRegister - Constructs a JavaScript object which will
  * contain PostgreSql driver functions and register it.
  * @cx: JavaScript context
  * @global: global JavaScript object
  *
  * Returns JS_TRUE on success and JS_FALSE on failure
  */
-JSBool JS_PostgresConstructAndRegister(JSContext * cx, JSObject * global)
+JSBool JS_PgsqlConstructAndRegister(JSContext * cx, JSObject * global)
 {
 	JSObject *obj = JS_NewObject(cx, NULL, NULL, NULL);
 
-	if (!JS_DefineFunctions(cx, obj, PostgresDriver_functions))
+	if (!JS_DefineFunctions(cx, obj, PgsqlDriver_functions))
 		return JS_FALSE;
 
 	return JS_SqlRegisterDriver(cx, global, obj);

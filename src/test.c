@@ -230,7 +230,7 @@ int main(int argc, const char *argv[])
 
 #ifdef HAVE_POSTGRESQL
 	printf ("\n[Running postgresql tests]\n");
-	JS_PostgresConstructAndRegister(cx, global);
+	JS_PgsqlConstructAndRegister(cx, global);
 	ret_postgres = run_test("test_pgsql.js", cx, global);
 	printf("----------------------------------------------------\n");
 	printf("\n%s: test_postgres\n\n", (ret_postgres == 0)? "PASS" : "FAIL");

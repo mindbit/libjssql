@@ -1,6 +1,6 @@
 // create table people(id serial primary key, name varchar(40), age int);
 
-function getPostgresConnection() {
+function getPgsqlConnection() {
 	return DriverManager.getConnection("postgresql://127.0.0.1/test_js_sql", "test_js_sql", "123456");
 }
 
@@ -20,7 +20,7 @@ function comparison_test() {
 		"select age from people where name = 'Test' AND age < ?"
 	];
 	t1 = gettimeoftheday();
-	var conn = getPostgresConnection();
+	var conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 	var stmt = conn.createStatement(); //create simple stmt
@@ -54,11 +54,11 @@ function comparison_test() {
 }
 
 function integration_test() {
-	var connectionPostgres, connectionMysql;
-	var statementPostgres, statementMysql;
+	var connectionPgsql, connectionMysql;
+	var statementPgsql, statementMysql;
 
-	connectionPostgres = getPostgresConnection();
-	if (connectionPostgres == null) {
+	connectionPgsql = getPgsqlConnection();
+	if (connectionPgsql == null) {
 		println("Failed to connect to PostgreSQL database");
 		return "FAIL";
 	}
@@ -70,20 +70,20 @@ function integration_test() {
 	}
 
 	statementMysql = connectionMysql.createStatement();
-	statementPostgres = connectionPostgres.createStatement();
-	if (statementMysql == null || statementPostgres == null) {
+	statementPgsql = connectionPgsql.createStatement();
+	if (statementMysql == null || statementPgsql == null) {
 		println("Failed to create statement");
 		return "FAIL";
 	}
 
-	statementPostgres.executeUpdate("DROP TABLE IF EXISTS test");
-	if (statementPostgres.execute("CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(40) not null, age INT);") == false) {
+	statementPgsql.executeUpdate("DROP TABLE IF EXISTS test");
+	if (statementPgsql.execute("CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(40) not null, age INT);") == false) {
 		println("Failed to create the table");
 		return "FAIL";
 	}
 
-	var preparedStatementPostgres = connectionPostgres.prepareStatement("INSERT INTO test (id, name, age) values (?, ?, ?) ");
-	if (preparedStatementPostgres == null) {
+	var preparedStatementPgsql = connectionPgsql.prepareStatement("INSERT INTO test (id, name, age) values (?, ?, ?) ");
+	if (preparedStatementPgsql == null) {
 		println("Failed to prepare the statement");
 		return "FAIL";
 	}
@@ -97,17 +97,17 @@ function integration_test() {
 
 	//populate PostgreSQL database
 	while(resultMysql.next()) {
-		preparedStatementPostgres.setNumber(1, resultMysql.getNumber(1));
-		preparedStatementPostgres.setString(2, resultMysql.getString(2));
-		preparedStatementPostgres.setNumber(3, resultMysql.getNumber(3));
-		preparedStatementPostgres.executeUpdate();
+		preparedStatementPgsql.setNumber(1, resultMysql.getNumber(1));
+		preparedStatementPgsql.setString(2, resultMysql.getString(2));
+		preparedStatementPgsql.setNumber(3, resultMysql.getNumber(3));
+		preparedStatementPgsql.executeUpdate();
 	}
 
 	//collect info from postgresql
-	var resultPostgres = statementPostgres.executeQuery("SELECT * from test");
+	var resultPgsql = statementPgsql.executeQuery("SELECT * from test");
 
 	//check if they are identical
-	if (!compareTwoObjects(resultMysql, resultPostgres)) {
+	if (!compareTwoObjects(resultMysql, resultPgsql)) {
 		println("Different objects");
 		return "FAIL";
 	}
@@ -118,7 +118,7 @@ function integration_test() {
 function connection_test() {
 	var conn;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 	else
@@ -128,7 +128,7 @@ function connection_test() {
 function createStatement_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -142,7 +142,7 @@ function createStatement_test() {
 function execute_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -157,7 +157,7 @@ function execute_test() {
 function executeQuery_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -175,7 +175,7 @@ function executeQuery_test() {
 function executeUpdate_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -193,7 +193,7 @@ function executeUpdate_test() {
 function preparedStatement_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -207,7 +207,7 @@ function preparedStatement_test() {
 function preparedStatement_set_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -237,7 +237,7 @@ function preparedStatement_set_test() {
 function preparedStatement_execute_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -260,7 +260,7 @@ function preparedStatement_execute_test() {
 function preparedStatement_executeQuery_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -284,7 +284,7 @@ function preparedStatement_executeQuery_test() {
 function preparedStatement_executeUpdate_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -346,7 +346,7 @@ function compareTwoObjects(x, y) {
 
 function getGeneratedKeys_test() {
 	var conn, stmt, rs;
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -386,7 +386,7 @@ function getGeneratedKeys_test() {
 function getResultSet_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -407,7 +407,7 @@ function getResultSet_test() {
 function getUpdateCount_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -428,7 +428,7 @@ function getUpdateCount_test() {
 function getConnection_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -449,7 +449,7 @@ function getConnection_test() {
 function preparedStatement_getConnection_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -472,7 +472,7 @@ function preparedStatement_getConnection_test() {
 function preparedStatement_getGeneratedKeys_test() {
 	var conn, stmt, rs;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -503,7 +503,7 @@ function preparedStatement_getGeneratedKeys_test() {
 function preparedStatement_getResultSet_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -530,7 +530,7 @@ function preparedStatement_getResultSet_test() {
 function preparedStatement_getUpdateCount_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -556,7 +556,7 @@ function preparedStatement_getUpdateCount_test() {
 function simpleStatementResult_test() {
 	var conn, stmt;
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 
@@ -614,7 +614,7 @@ function preparedStatementResult_test() {
 	var conn, stmt, age, name;
 	var studentName = "Cristina";
 
-	conn = getPostgresConnection();
+	conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
 

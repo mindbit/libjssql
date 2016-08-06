@@ -38,6 +38,6 @@
 #define NO_GENERATED_KEYS			0
 #define RETURN_GENERATED_KEYS			1
 
-JSBool JS_PostgresConstructAndRegister(JSContext *cx, JSObject *global);
+JSBool JS_PgsqlConstructAndRegister(JSContext *cx, JSObject *global);
 
 #endif
