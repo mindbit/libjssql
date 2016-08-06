@@ -1567,7 +1567,8 @@ out:
 
 static JSFunctionSpec PostgresDriver_functions[] = {
 	JS_FS("acceptsURL", PostgresDriver_acceptsURL, 1, 0),
-	JS_FS("connect", PostgresDriver_connect, 2, 0)
+	JS_FS("connect", PostgresDriver_connect, 2, 0),
+	JS_FS_END
 };
 
 /**
