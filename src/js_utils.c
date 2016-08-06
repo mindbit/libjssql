@@ -15,45 +15,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#include "js_utils.h"
-
- /**
-  * JSString_to_CString - convert JSString value to an array of chars
-  * @cx: JavaScript context
-  * @v: JSString value
-  *
-  * Returns NULL on failure and a pointer to the converted value on success
-  */
-char *JSString_to_CString(JSContext * cx, jsval v)
-{
-	JSString *value = JS_ValueToString(cx, v);
-
-	if (value == NULL) {
-		dlog(LOG_ALERT, "Failed to convert the value to JSString\n");
-		goto out;
-	}
-
-	if (JS_AddStringRoot(cx, &value) == JS_FALSE) {
-		dlog(LOG_ALERT, "Failed to root the string value\n");
-		goto out;
-	}
-
-	char *value_str = JS_EncodeString(cx, value);
-	if (value_str == NULL) {
-		dlog(LOG_ALERT, "Failed to encode the string value\n");
-		goto out_clean;
-	}
-
-	//FIXME not sure is this is safe
-	JS_RemoveStringRoot(cx, &value);
-
-	return value_str;
-
-out_clean:
-	JS_RemoveStringRoot(cx, &value);
-out:
-	return NULL;
-}
+#include <stdlib.h>
 
 /**
  * my_itoa - convert n to characters and returns the result

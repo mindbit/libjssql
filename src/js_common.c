@@ -15,6 +15,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <jsmisc.h>
 #include "js_common.h"
 
  /**
@@ -54,7 +55,7 @@ JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec 
 	if (obj == NULL) {
 		ret = JS_FALSE;
 		JS_ReportError(cx, "Failed to create a new object\n");
-		dlog(LOG_ALERT, "Failed to create a new object\n");
+		JS_Log(JS_LOG_ERR, "Failed to create a new object\n");
 		goto out;
 	}
 
@@ -65,7 +66,7 @@ JSBool createStatement(JSContext *cx, jsval *vp, JSClass *class, JSFunctionSpec 
 	if (JS_DefineFunctions(cx, obj, functions) == JS_FALSE) {
 		ret = JS_FALSE;
 		JS_ReportError(cx, "Failed to define functions in createStatement\n");
-		dlog(LOG_ALERT, "Failed to define functions in createStatement\n");
+		JS_Log(JS_LOG_ERR, "Failed to define functions in createStatement\n");
 		goto out;
 	}
 

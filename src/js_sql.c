@@ -15,6 +15,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <jsmisc.h>
 #include "js_sql.h"
 
 static JSBool DriverManager_getDriver(JSContext *cx, unsigned argc, jsval *vp)
@@ -136,7 +137,7 @@ JSBool JS_SqlInit(JSContext *cx, JSObject *global)
 	obj = JS_DefineObject(cx, global, "DriverManager", &DriverManager_class, NULL, JSPROP_ENUMERATE);
 
 	if (!obj) {
-		dlog(LOG_ALERT, "Failed to create the DriverManager object\n");
+		JS_Log(JS_LOG_ERR, "Failed to create the DriverManager object\n");
 		return JS_FALSE;
 	}
 
@@ -149,26 +150,26 @@ JSBool JS_SqlInit(JSContext *cx, JSObject *global)
 
 	if (JS_DefineProperty(cx, obj, "drivers", OBJECT_TO_JSVAL(drivers), NULL, NULL, 
 		JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
-		dlog(LOG_ALERT, "Failed define drivers property\n");
+		JS_Log(JS_LOG_ERR, "Failed define drivers property\n");
 		return JS_FALSE;
 	}
 
 	JSObject *statement;
 	statement = JS_DefineObject(cx, global, "Statement", NULL, NULL, JSPROP_ENUMERATE);
 	if (!statement) {
-		dlog(LOG_ALERT, "Failed to create the Statement object\n");
+		JS_Log(JS_LOG_ERR, "Failed to create the Statement object\n");
 		return JS_FALSE;
 	}
 
 	if (JS_DefineProperty(cx, statement, "RETURN_GENERATED_KEYS", JSVAL_ONE, NULL, NULL, 
 		JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
-		dlog(LOG_ALERT, "Failed define RETURN_GENERATED_KEYS property\n");
+		JS_Log(JS_LOG_ERR, "Failed define RETURN_GENERATED_KEYS property\n");
 		return JS_FALSE;
 	}
 
 	if (JS_DefineProperty(cx, statement, "NO_GENERATED_KEYS", JSVAL_ZERO, NULL, NULL, 
 		JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT) == JS_FALSE) {
-		dlog(LOG_ALERT, "Failed define NO_GENERATED_KEYS property\n");
+		JS_Log(JS_LOG_ERR, "Failed define NO_GENERATED_KEYS property\n");
 		return JS_FALSE;
 	}
 

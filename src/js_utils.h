@@ -18,10 +18,6 @@
 #ifndef _JS_UTILS_H
 #define _JS_UTILS_H
 
-#include <jsapi.h>
-#include "js_debug.h"
-
-char *JSString_to_CString(JSContext * cx, jsval v);
 char *my_itoa(int n);
 
 #endif
