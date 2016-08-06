@@ -20,7 +20,10 @@
 #include <mysql.h>
 #include <assert.h>
 #include <jsmisc.h>
-#include "js_mysql.h"
+
+#include "jsmysql.h"
+#include "jssql.h"
+#include "jscommon.h"
 
 struct prepared_statement {
 	MYSQL_STMT *stmt;

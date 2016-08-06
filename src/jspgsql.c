@@ -17,7 +17,11 @@
 
 #define _GNU_SOURCE
 #include <jsmisc.h>
-#include "js_postgres.h"
+#include <libpq-fe.h>
+
+#include "jspgsql.h"
+#include "jssql.h"
+#include "jscommon.h"
 
 struct agk_columns {
 	uint32_t len;

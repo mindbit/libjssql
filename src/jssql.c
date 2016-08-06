@@ -16,7 +16,7 @@
  */
 
 #include <jsmisc.h>
-#include "js_sql.h"
+#include "jssql.h"
 
 static JSBool DriverManager_getDriver(JSContext *cx, unsigned argc, jsval *vp)
 {

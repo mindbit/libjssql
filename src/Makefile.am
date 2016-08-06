@@ -3,10 +3,10 @@
 #
 
 lib_LTLIBRARIES = libjssql.la
-libjssql_la_SOURCES = js_sql.c js_common.c
+libjssql_la_SOURCES = jssql.c jscommon.c
 libjssql_la_LIBADD = $(LIBS)
 libjssql_la_LDFLAGS = $(LDFLAGS) -version-info 1
-include_HEADERS = js_sql.h
+include_HEADERS = jssql.h
 
 #
 # MySQL support
@@ -14,10 +14,10 @@ include_HEADERS = js_sql.h
 
 if HAVE_MYSQL
     lib_LTLIBRARIES += libjssql_mysql.la
-    include_HEADERS += js_mysql.h
+    include_HEADERS += jsmysql.h
 endif
 
-libjssql_mysql_la_SOURCES = js_mysql.c
+libjssql_mysql_la_SOURCES = jsmysql.c
 libjssql_mysql_la_CFLAGS = @MYSQL_CFLAGS@
 libjssql_mysql_la_LIBADD = @MYSQL_LDFLAGS@
 libjssql_mysql_la_LDFLAGS = -version-info 1
@@ -27,14 +27,14 @@ libjssql_mysql_la_LDFLAGS = -version-info 1
 #
 
 if HAVE_POSTGRESQL
-    lib_LTLIBRARIES += libjssql_postgres.la
-    include_HEADERS += js_postgres.h
+    lib_LTLIBRARIES += libjssql_pgsql.la
+    include_HEADERS += jspgsql.h
 endif
 
-libjssql_postgres_la_SOURCES = js_postgres.c
-libjssql_postgres_la_CFLAGS = @POSTGRESQL_CPPFLAGS@
-libjssql_postgres_la_LIBADD = @POSTGRESQL_LIBS@
-libjssql_postgres_la_LDFLAGS = @POSTGRESQL_LDFLAGS@ -version-info 1
+libjssql_pgsql_la_SOURCES = jspgsql.c
+libjssql_pgsql_la_CFLAGS = @POSTGRESQL_CPPFLAGS@
+libjssql_pgsql_la_LIBADD = @POSTGRESQL_LIBS@
+libjssql_pgsql_la_LDFLAGS = @POSTGRESQL_LDFLAGS@ -version-info 1
 
 #
 # Test programs
@@ -51,6 +51,6 @@ if HAVE_MYSQL
 endif
 
 if HAVE_POSTGRESQL
-    test_LDADD += libjssql_postgres.la
-    test_DEPENDENCIES += libjssql_postgres.la
+    test_LDADD += libjssql_pgsql.la
+    test_DEPENDENCIES += libjssql_pgsql.la
 endif

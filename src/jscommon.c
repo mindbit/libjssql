@@ -16,7 +16,7 @@
  */
 
 #include <jsmisc.h>
-#include "js_common.h"
+#include "jscommon.h"
 
 /**
  * getConnection - search for a connection property of an object

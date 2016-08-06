@@ -21,9 +21,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/time.h>
+#include <jsapi.h>
 
-#include "js_mysql.h"
-#include "js_postgres.h"
+#include "jssql.h"
+#include "jsmysql.h"
+#include "jspgsql.h"
 #include "jssql_config.h"
 
 /* The class of the global object. */
@@ -229,7 +231,7 @@ int main(int argc, const char *argv[])
 #ifdef HAVE_POSTGRESQL
 	printf ("\n[Running postgresql tests]\n");
 	JS_PostgresConstructAndRegister(cx, global);
-	ret_postgres = run_test("test_postgres.js", cx, global);
+	ret_postgres = run_test("test_pgsql.js", cx, global);
 	printf("----------------------------------------------------\n");
 	printf("\n%s: test_postgres\n\n", (ret_postgres == 0)? "PASS" : "FAIL");
 #endif
