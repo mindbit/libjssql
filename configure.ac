@@ -112,7 +112,9 @@ if test "x$ac_cv_header_jsmisc_h" != xyes ; then
     AC_MSG_ERROR([jsmisc.h not found])
 fi
 
-AC_CHECK_LIB([jsmisc],[__js_log])
+AC_CHECK_LIB([jsmisc],[JS_LogImpl],[],[
+    AC_MSG_ERROR([jsmisc library not found])
+])
 
 #
 # test for mysql
