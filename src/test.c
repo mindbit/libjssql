@@ -35,63 +35,6 @@ static JSClass global_class = {
 	JSCLASS_NO_OPTIONAL_MEMBERS
 };
 
-static void js_dump_value(JSContext *cx, jsval v)
-{
-	char *c_str;
-	JSString *js_str;
-
-	switch (JS_TypeOfValue(cx, v)) {
-	case JSTYPE_VOID:
-		printf("VOID\n");
-		break;
-	case JSTYPE_OBJECT:
-		if (JSVAL_IS_NULL(v)) {
-			printf("NULL\n");
-			break;
-		}
-		if (JS_IsArrayObject(cx, JSVAL_TO_OBJECT(v))) {
-			printf("ARRAY\n");
-			break;
-		}
-		printf("OBJECT {\n");
-		printf("}\n");
-		break;
-	case JSTYPE_FUNCTION:
-		printf("FUNCTION\n");
-		break;
-	case JSTYPE_STRING:
-		c_str = JS_EncodeString(cx, JSVAL_TO_STRING(v));
-		printf("STRING(%zu) \"%s\"\n", strlen(c_str), c_str);
-		JS_free(cx, c_str);
-		break;
-	case JSTYPE_NUMBER:
-		js_str = JS_ValueToString(cx, v);
-		c_str = JS_EncodeString(cx, js_str);
-		printf("NUMBER(%s)\n", c_str);
-		JS_free(cx, c_str);
-		break;
-	case JSTYPE_BOOLEAN:
-		js_str = JS_ValueToString(cx, v);
-		c_str = JS_EncodeString(cx, js_str);
-		printf("BOOLEAN(%s)\n", c_str);
-		JS_free(cx, c_str);
-		break;
-	default:
-		printf("FIXME\n");
-		break;
-	}
-}
-
-static JSBool js_dump(JSContext *cx, unsigned argc, jsval *vp)
-{
-	unsigned i;
-
-	for (i = 0; i < argc; i++)
-		js_dump_value(cx, JS_ARGV(cx, vp)[i]);
-
-	return JS_TRUE;
-}
-
 static int run_test(char *source, JSContext *cx, JSObject *global)
 {
 	int fd;
@@ -162,7 +105,6 @@ int main(int argc, const char *argv[])
 		return 1;
 
 	JS_MiscInit(cx, global);
-	JS_DefineFunction(cx, global, "dump", js_dump, 0, 0);
 
 	if (!JS_SqlInit(cx, global))
 		return 1;
