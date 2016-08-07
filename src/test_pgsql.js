@@ -19,7 +19,7 @@ function comparison_test() {
 		"select * from people where age > ? and age < ?",
 		"select age from people where name = 'Test' AND age < ?"
 	];
-	t1 = gettimeoftheday();
+	t1 = gettimeofday();
 	var conn = getPgsqlConnection();
 	if (conn == null)
 		return "FAIL";
@@ -45,7 +45,7 @@ function comparison_test() {
 		}
 	}
 
-	t2 = gettimeoftheday();
+	t2 = gettimeofday();
 
 	print("Time: ");
 	println(t2 - t1);

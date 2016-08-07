@@ -20,8 +20,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <sys/time.h>
-#include <jsapi.h>
+#include <jsmisc.h>
 
 #include "jssql.h"
 #include "jsmysql.h"
@@ -35,54 +34,6 @@ static JSClass global_class = {
 	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
 	JSCLASS_NO_OPTIONAL_MEMBERS
 };
-
-/* The error reporter callback. */
-void reportError(JSContext *cx, const char *message, JSErrorReport *report)
-{
-	fprintf(stderr, "ERROR [%s:%u] %s\n",
-			report->filename ? report->filename : "<no filename>",
-			(unsigned int) report->lineno, message);
-}
-
-static JSBool gettimeoftheday(JSContext *cx, unsigned argc, jsval *vp)
-{
-	struct timeval t;
-	double elapsedTime;
-	jsval rval;
-
-	// start timer
-	gettimeofday(&t, NULL);
-	elapsedTime = t.tv_sec * 1000000 + t.tv_usec;
-
-	rval = JS_NumberValue(elapsedTime);;
-
-	JS_SET_RVAL(cx, vp, rval);
-	return JS_TRUE;
-}
-
-static JSBool js_print(JSContext *cx, unsigned argc, jsval *vp)
-{
-	unsigned i;
-
-	for (i = 0; i < argc; i++) {
-		JSString *str = JS_ValueToString(cx, JS_ARGV(cx, vp)[i]);
-		// FIXME check return value
-		// FIXME root str (protect from GC) -> https://developer.mozilla.org/en-US/docs/SpiderMonkey/JSAPI_Reference/JS_ValueToString
-
-		char *c_str = JS_EncodeString(cx, str);
-		fputs(c_str, stdout);
-		JS_free(cx, c_str);
-	}
-
-	return JS_TRUE;
-}
-
-static JSBool js_println(JSContext *cx, unsigned argc, jsval *vp)
-{
-	js_print(cx, argc, vp);
-	putc('\n', stdout);
-	return JS_TRUE;
-}
 
 static void js_dump_value(JSContext *cx, jsval v)
 {
@@ -157,7 +108,7 @@ static int run_test(char *source, JSContext *cx, JSObject *global)
 	jsval rval;
 	uint lineno = 0;
 
-	JS_EvaluateScript(cx, global, buf, len, "noname", lineno, &rval);
+	JS_EvaluateScript(cx, global, buf, len, source, lineno, &rval);
 
 	munmap(buf, len);
 	close(fd);
@@ -190,7 +141,7 @@ int main(int argc, const char *argv[])
 		return 1;
 	JS_SetOptions(cx, JSOPTION_VAROBJFIX | JSOPTION_METHODJIT);
 	JS_SetVersion(cx, JSVERSION_LATEST);
-	JS_SetErrorReporter(cx, reportError);
+	JS_MiscSetErrorReporter(cx);
 
 	/*
 	 * Create the global object in a new compartment.
@@ -210,10 +161,8 @@ int main(int argc, const char *argv[])
 	if (!JS_InitStandardClasses(cx, global))
 		return 1;
 
+	JS_MiscInit(cx, global);
 	JS_DefineFunction(cx, global, "dump", js_dump, 0, 0);
-	JS_DefineFunction(cx, global, "print", js_print, 0, 0);
-	JS_DefineFunction(cx, global, "println", js_println, 0, 0);
-	JS_DefineFunction(cx, global, "gettimeoftheday", gettimeoftheday, 0, 0);
 
 	if (!JS_SqlInit(cx, global))
 		return 1;
