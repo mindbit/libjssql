@@ -1,6 +1,6 @@
 AC_PREREQ(2.61)
 # Checks for programs.
-AC_INIT([libjssql], [0.0.1], [support@mindbit.ro])
+AC_INIT([libjssql], [1.0], [support@mindbit.ro])
 
 # Detect missing Autoconf Archive library in the system
 m4_pattern_forbid([^AX_])
@@ -12,14 +12,13 @@ AC_CANONICAL_SYSTEM
 AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS([jssql_config.h])
 AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_FILES([Makefile src/Makefile])
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AM_PROG_CC_C_O
 LT_INIT
-AC_SUBST(MKDIR_P)
-
 
 CFLAGS="-Wall $CFLAGS"
 
@@ -161,8 +160,4 @@ echo "PostgreSQL support ... $found_postgresql" >&AS_MESSAGE_FD
 echo "Debugging support .... $enable_debug" >&AS_MESSAGE_FD
 echo >&AS_MESSAGE_FD
 
-AC_CONFIG_FILES([
-Makefile
-src/Makefile
-])
 AC_OUTPUT
