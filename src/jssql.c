@@ -16,6 +16,7 @@
  */
 
 #include <jsmisc.h>
+#include "config.h"
 #include "jssql.h"
 
 static JSBool DriverManager_getDriver(JSContext *cx, unsigned argc, jsval *vp)
@@ -133,6 +134,8 @@ static JSFunctionSpec DriverManager_functions[] = {
 
 JSBool JS_SqlInit(JSContext *cx, JSObject *global)
 {
+	JS_Log(JS_LOG_INFO, "%s\n", VERSION_STR);
+
 	JSObject *obj;
 	obj = JS_DefineObject(cx, global, "DriverManager", &DriverManager_class, NULL, JSPROP_ENUMERATE);
 

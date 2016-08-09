@@ -22,10 +22,10 @@
 #include <fcntl.h>
 #include <jsmisc.h>
 
+#include "config.h"
 #include "jssql.h"
 #include "jsmysql.h"
 #include "jspgsql.h"
-#include "jssql_config.h"
 
 /* The class of the global object. */
 static JSClass global_class = {
