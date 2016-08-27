@@ -183,7 +183,7 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 		goto out;
 	}
 
-	char *nativeSQL = JS_StringToCStr(cx, nativeSQL_jsv);
+	char *nativeSQL = JS_EncodeStringValue(cx, nativeSQL_jsv);
 	if (nativeSQL == NULL) {
 		ret = JS_FALSE;
 		JS_Log(JS_LOG_ERR, "Failed to convert the SQL query\n");
@@ -918,7 +918,7 @@ static JSFunctionSpec MysqlConnection_functions[] = {
 
 static JSBool MysqlDriver_acceptsURL(JSContext *cx, unsigned argc, jsval *vp)
 {
-	char *url = JS_StringToCStr(cx, JS_ARGV(cx, vp)[0]);
+	char *url = JS_EncodeStringValue(cx, JS_ARGV(cx, vp)[0]);
 
 	JS_Log(JS_LOG_INFO, "mysql check: '%s'\n", url);
 	if (strncmp(url, "mysql://", 8))
@@ -941,7 +941,7 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 	 * allow the DriverManager code to try the next driver */
 	ret = JS_TRUE;
 
-	char *url = JS_StringToCStr(cx, JS_ARGV(cx, vp)[0]);
+	char *url = JS_EncodeStringValue(cx, JS_ARGV(cx, vp)[0]);
 	if (strncmp(url, "mysql://", 8))
 		goto out_clean;
 

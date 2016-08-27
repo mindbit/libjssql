@@ -206,7 +206,7 @@ static struct statement *generate_statement(JSContext *cx, jsval cmd, int autoGe
 	}
 	memset(stmt, 0, sizeof(struct statement));
 
-	char *nativeSQL = JS_StringToCStr(cx, cmd);
+	char *nativeSQL = JS_EncodeStringValue(cx, cmd);
 
 	stmt->p_len = get_plen(nativeSQL);
 	stmt->row_index = -1;
@@ -330,7 +330,7 @@ PgsqlResultSet_get(JSContext *cx, unsigned argc, jsval *vp)
 			goto out;
 		}
 	} else if (JSVAL_IS_STRING(JS_ARGV(cx, vp)[0])) {
-		char *column_name = JS_StringToCStr(cx, JS_ARGV(cx, vp)[0]);
+		char *column_name = JS_EncodeStringValue(cx, JS_ARGV(cx, vp)[0]);
 		if (column_name == NULL) {
 			ret = JS_FALSE;
 			goto out;
@@ -689,7 +689,7 @@ get_columns_values(JSContext *cx, jsval *vp, struct agk_columns **columns)
 				goto out_clean;
 			}
 
-			char *value = JS_StringToCStr(cx, elem_it);
+			char *value = JS_EncodeStringValue(cx, elem_it);
 			(*columns)->names[i] = malloc (strlen(value) * sizeof(char));
 			if ((*columns)->names[i] == NULL) {
 				JS_Log(JS_LOG_WARNING, "Failed to allocate memory\n");
@@ -1197,7 +1197,7 @@ PgsqlPreparedStatement_set(JSContext *cx, unsigned argc, jsval *vp)
 	if (argc < 2 || JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
 		stmt->p_values[pos] = NULL;
 	} else {
-		char *value = JS_StringToCStr(cx, JS_ARGV(cx, vp)[1]);
+		char *value = JS_EncodeStringValue(cx, JS_ARGV(cx, vp)[1]);
 		stmt->p_values[pos] = malloc (strlen(value) * sizeof(char));
 		if (stmt->p_values[pos] == NULL) {
 			JS_Log(JS_LOG_WARNING, "Failed to allocate memory\n");
@@ -1415,7 +1415,7 @@ static JSClass PgsqlConnection_class = {
  */
 static JSBool PgsqlDriver_acceptsURL(JSContext * cx, unsigned argc, jsval * vp)
 {
-	char *url = JS_StringToCStr(cx, JS_ARGV(cx, vp)[0]);
+	char *url = JS_EncodeStringValue(cx, JS_ARGV(cx, vp)[0]);
 	if (url == NULL) {
 		JS_Log(JS_LOG_ERR, "Failed to convert the URL value to JSString\n");
 		goto out;
@@ -1454,7 +1454,7 @@ static JSBool PgsqlDriver_connect(JSContext * cx, unsigned argc, jsval * vp)
 	if (!argc)
 		goto out;
 
-	char *url = JS_StringToCStr(cx, JS_ARGV(cx, vp)[0]);
+	char *url = JS_EncodeStringValue(cx, JS_ARGV(cx, vp)[0]);
 	if (url == NULL) {
 		JS_ReportError(cx, "[PgsqlDriver_connect] Failed to convert the URL "
 				"value to JSString\n");
