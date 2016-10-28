@@ -220,7 +220,7 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 
 	if (mysql_stmt_prepare(pstmt->stmt, nativeSQL, strlen(nativeSQL))) {
 		JS_Log(JS_LOG_ERR, "Failed to prepare statement: %s\n", mysql_stmt_error(pstmt->stmt));
-		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 		free(nativeSQL);
 		nativeSQL = NULL;
 		free(pstmt);
@@ -332,7 +332,7 @@ static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsv
 	bind.buffer_length = sizeof(double);
 
 	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, i, 0)) {
-		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 		return JS_FALSE;
 	}
 
@@ -365,7 +365,7 @@ static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsv
 	bind.buffer_length = pstmt->r_bind_len[i];
 
 	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, i, 0)) {
-		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 		return JS_FALSE;
 	}
 
@@ -415,7 +415,7 @@ static JSBool MysqlPreparedResultSet_next(JSContext *cx, unsigned argc, jsval *v
 		return JS_TRUE;
 	default:
 		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 	}
 
 	return JS_FALSE;
@@ -450,12 +450,12 @@ static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statemen
 	unsigned int i;
 
 	if (pstmt->p_len && mysql_stmt_bind_param(pstmt->stmt, pstmt->p_bind)) {
-		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 		return JS_FALSE;
 	}
 
 	if (mysql_stmt_execute(pstmt->stmt)) {
-		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 		clear_statement(pstmt);
 		return JS_FALSE;
 	}
@@ -468,7 +468,7 @@ static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statemen
 	pstmt->p_bind = NULL;
 
 	if (pstmt->r_len && mysql_stmt_bind_result(pstmt->stmt, pstmt->r_bind)) {
-		JS_ReportError(cx, mysql_stmt_error(pstmt->stmt));
+		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 		clear_statement(pstmt);
 		return JS_FALSE;
 	}
@@ -992,7 +992,7 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 
 	if (!conn) {
 		ret = JS_FALSE;
-		JS_ReportError(cx, mysql_error(mysql));
+		JS_ReportError(cx, "%s", mysql_error(mysql));
 		mysql_close(mysql);
 		goto out_clean;
 	}
