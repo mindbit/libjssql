@@ -5,7 +5,7 @@
 lib_LTLIBRARIES = libjssql.la
 libjssql_la_SOURCES = jssql.c jscommon.c
 libjssql_la_LIBADD = $(LIBS)
-libjssql_la_LDFLAGS = $(LDFLAGS) -version-info 1
+libjssql_la_LDFLAGS = $(LDFLAGS) -version-info 1:1
 include_HEADERS = jssql.h
 
 #
@@ -20,7 +20,7 @@ endif
 libjssql_mysql_la_SOURCES = jsmysql.c
 libjssql_mysql_la_CFLAGS = @MYSQL_CFLAGS@
 libjssql_mysql_la_LIBADD = @MYSQL_LDFLAGS@
-libjssql_mysql_la_LDFLAGS = -version-info 1
+libjssql_mysql_la_LDFLAGS = -version-info 1:1
 
 #
 # PostgreSQL support
@@ -34,7 +34,7 @@ endif
 libjssql_pgsql_la_SOURCES = jspgsql.c
 libjssql_pgsql_la_CFLAGS = @POSTGRESQL_CPPFLAGS@
 libjssql_pgsql_la_LIBADD = @POSTGRESQL_LIBS@
-libjssql_pgsql_la_LDFLAGS = @POSTGRESQL_LDFLAGS@ -version-info 1
+libjssql_pgsql_la_LDFLAGS = @POSTGRESQL_LDFLAGS@ -version-info 1:1
 
 #
 # Test programs
