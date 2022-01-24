@@ -19,6 +19,8 @@
 #include "config.h"
 #include "jssql.h"
 
+#if 0
+
 static JSBool DriverManager_getDriver(JSContext *cx, unsigned argc, jsval *vp)
 {
 	jsval drivers;
@@ -191,3 +193,5 @@ JSBool JS_SqlRegisterDriver(JSContext *cx, JSObject *global, JSObject *driver)
 
 	return JS_TRUE;
 }
+
+#endif

@@ -52,6 +52,8 @@ struct statement {
 };
 
 #if 0
+
+#if 0
 /**
  * pretty_printer - internal function used for debugging
  * @stmt: pointer to the structure
@@ -1594,3 +1596,5 @@ JSBool JS_PgsqlConstructAndRegister(JSContext * cx, JSObject * global)
 
 	return JS_SqlRegisterDriver(cx, global, obj);
 }
+
+#endif

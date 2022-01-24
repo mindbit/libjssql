@@ -18,6 +18,7 @@
 #include <jsmisc.h>
 #include "jscommon.h"
 
+#if 0
 /**
  * getConnection - search for a connection property of an object
  * and return the reference of the property
@@ -102,3 +103,5 @@ JSBool nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
 
 	return JS_FALSE;
 }
+
+#endif

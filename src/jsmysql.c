@@ -25,6 +25,8 @@
 #include "jssql.h"
 #include "jscommon.h"
 
+#if 0
+
 struct prepared_statement {
 	MYSQL_STMT *stmt;
 
@@ -1058,3 +1060,5 @@ JSBool JS_MysqlConstructAndRegister(JSContext *cx, JSObject *global)
 }
 
 // vim: foldmethod=marker
+
+#endif

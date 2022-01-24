@@ -18,8 +18,6 @@
 #ifndef jspgsql_h___
 #define jspgsql_h___
 
-#include <jsapi.h>
-
 #define POSTGRES_URI				"postgresql://"
 #define POSTGRES_URI_LEN			13
 #define POSTGRES_DEFAULT_PORT			5432
@@ -38,6 +36,12 @@
 #define NO_GENERATED_KEYS			0
 #define RETURN_GENERATED_KEYS			1
 
+#if 0
+
+#include <jsapi.h>
+
 JSBool JS_PgsqlConstructAndRegister(JSContext *cx, JSObject *global);
+
+#endif
 
 #endif
