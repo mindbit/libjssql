@@ -3,13 +3,8 @@
 #ifndef jssql_h___
 #define jssql_h___
 
-#if 0
+#include <duktape.h>
 
-#include <jsapi.h>
-
-JSBool JS_SqlInit(JSContext *cx, JSObject *global);
-JSBool JS_SqlRegisterDriver(JSContext *cx, JSObject *global, JSObject *driver);
-
-#endif
+duk_bool_t js_sql_init(duk_context *ctx);
 
 #endif
