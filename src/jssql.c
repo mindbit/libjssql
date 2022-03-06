@@ -133,13 +133,11 @@ static duk_function_list_entry DriverManager_functions[] = {
 
 duk_bool_t js_sql_init(duk_context *ctx)
 {
-	int rc;
-
 	duk_push_object(ctx);
 	duk_push_string(ctx, "drivers");
 	duk_push_array(ctx);
 
-	rc = duk_put_prop(ctx, -3);
+	duk_put_prop(ctx, -3);
 	duk_put_function_list(ctx, -1, DriverManager_functions);
 
 	duk_put_global_string(ctx, "DriverManager");
