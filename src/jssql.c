@@ -74,7 +74,9 @@ static int DriverManager_getConnection(duk_context *ctx)
 		duk_pop_2(ctx);
 	}
 
-	return -1;
+	/* If none of the drivers were successful in creating a connection,
+	error should be thrown. */
+	return DUK_RET_ERROR;
 }
 
 static int DriverManager_getDriver(duk_context *ctx)
