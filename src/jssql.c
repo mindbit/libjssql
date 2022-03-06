@@ -7,7 +7,6 @@
 static int DriverManager_getConnection(duk_context *ctx)
 {
 	duk_size_t i, len;
-	duk_int_t rc;
 	int argc = duk_get_top(ctx);
 	const char *url = duk_safe_to_string(ctx, 0);
 	const char *user, *password;
@@ -64,16 +63,12 @@ static int DriverManager_getConnection(duk_context *ctx)
 
 		duk_dup(ctx, -7);
 
-		rc = duk_pcall_method(ctx, 2);
+		duk_call_method(ctx, 2);
 
 		/* If the connect function doesn't return null and there are no errors,
 		the return value will be on top of the stack */
-		if (!duk_is_null(ctx, -1) && rc != DUK_EXEC_ERROR)
+		if (!duk_is_null(ctx, -1))
 			return 1;
-
-		/* Throw the error otherwise */
-		if (rc == DUK_EXEC_ERROR)
-			return DUK_RET_ERROR;
 
 		/* Pop retval and index */
 		duk_pop_2(ctx);
@@ -85,7 +80,6 @@ static int DriverManager_getConnection(duk_context *ctx)
 static int DriverManager_getDriver(duk_context *ctx)
 {
 	duk_size_t i, len;
-	duk_int_t rc;
 	const char *url = duk_safe_to_string(ctx, 0);
 
 	duk_push_this(ctx);
@@ -98,7 +92,7 @@ static int DriverManager_getDriver(duk_context *ctx)
 		duk_get_prop_string(ctx, -1, "acceptsURL");
 		duk_dup(ctx, -2);
 		duk_push_string(ctx, url);
-		rc = duk_pcall_method(ctx, 1);
+		duk_call_method(ctx, 1);
 
 		if (duk_get_boolean(ctx, -1)) {
 			/* Pop retval from acceptsURL so that the driver
