@@ -131,8 +131,19 @@ static duk_function_list_entry DriverManager_functions[] = {
 	{NULL,			NULL,				0}
 };
 
+static duk_number_list_entry Statement_constants[] = {
+	{"NO_GENERATED_KEYS",		0.0},
+	{"RETURN_GENERATED_KEYS",	1.0},
+	{NULL,				0.0}
+};
+
 duk_bool_t js_sql_init(duk_context *ctx)
 {
+	/* Create the global statement object */
+	duk_push_object(ctx);
+	duk_put_number_list(ctx, -1, Statement_constants);
+	duk_put_global_string(ctx, "Statement");
+
 	duk_push_object(ctx);
 	duk_push_string(ctx, "drivers");
 	duk_push_array(ctx);
