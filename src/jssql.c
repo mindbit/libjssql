@@ -106,8 +106,6 @@ static int DriverManager_getDriver(duk_context *ctx)
 		duk_pop_2(ctx);
 	}
 
-	duk_push_null(ctx);
-
 	return DUK_RET_ERROR;
 }
 
