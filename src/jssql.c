@@ -144,11 +144,12 @@ duk_bool_t js_sql_init(duk_context *ctx)
 	duk_put_number_list(ctx, -1, Statement_constants);
 	duk_put_global_string(ctx, "Statement");
 
+	/* Create DriverManager object */
 	duk_push_object(ctx);
-	duk_push_string(ctx, "drivers");
-	duk_push_array(ctx);
 
-	duk_put_prop(ctx, -3);
+	duk_push_array(ctx);
+	duk_put_prop_string(ctx, -2, "drivers");
+
 	duk_put_function_list(ctx, -1, DriverManager_functions);
 
 	duk_put_global_string(ctx, "DriverManager");
