@@ -2,7 +2,10 @@
 
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <stdbool.h>
+#include <string.h>
 #include <mysql.h>
+#include <math.h>
 #include <assert.h>
 #include <jsmisc.h>
 
@@ -10,20 +13,18 @@
 #include "jssql.h"
 #include "jscommon.h"
 
-#if 0
-
 struct prepared_statement {
 	MYSQL_STMT *stmt;
 
-	// parameters
+	/* parameters */
 	MYSQL_BIND *p_bind;
 	unsigned int p_len;
 
-	// results
+	/* results */
 	MYSQL_BIND *r_bind;
 	unsigned int r_len;
 	unsigned long *r_bind_len;
-	my_bool *r_is_null;
+	bool *r_is_null;
 };
 
 struct generated_keys {
@@ -65,6 +66,8 @@ static void clear_statement(struct prepared_statement *pstmt)
 	pstmt = NULL;
 
 }
+
+#if 0
 
 /**
  * MysqlGeneratedKeys_finalize - cleanup function for GeneratedKeys objects
@@ -142,79 +145,45 @@ static JSFunctionSpec MysqlGeneratedKeys_functions[] = {
 	JS_FS_END
 };
 
-static JSBool
-Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
+#endif
+
+static int Mysql_setStatement(duk_context *ctx, const char *query)
 {
-	JSBool ret = JS_TRUE;
-	jsval nativeSQL_argv[] = {JS_ARGV(cx, vp)[0]};
-	jsval nativeSQL_jsv;
-	jsval conn;
+	const char *nativeSQL;
+	unsigned int i;
 
-	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(obj), "getConnection",
-				argc, vp, &conn)) {
-		ret = JS_FALSE;
-		JS_Log(JS_LOG_ERR, "Failed to call getConnection\n");
-		goto out;
+	/* Call nativeSQL method on the connection object in the PreparedStatement given */
+	duk_get_prop_string(ctx, -1, "connection");
+	if (duk_is_undefined(ctx, -1)) {
+		duk_pop(ctx);
+		return 0;
 	}
 
-	if (JSVAL_IS_NULL(conn)) {
-		ret = JS_FALSE;
-		JS_Log(JS_LOG_ERR, "NULL Connection\n");
-		goto out;
-	}
+	duk_push_string(ctx, "nativeSQL");
+	duk_push_string(ctx, query);
+	duk_pcall_prop(ctx, -3, 1);
+	nativeSQL = duk_get_string(ctx, -1);
+	duk_pop(ctx);
 
-	if (!JS_CallFunctionName(cx, JSVAL_TO_OBJECT(conn), "nativeSQL", 1,
-				nativeSQL_argv, &nativeSQL_jsv)) {
-		ret = JS_FALSE;
-		JS_Log(JS_LOG_ERR, "Failed to call nativeSQL\n");
-		goto out;
-	}
-
-	char *nativeSQL = JS_EncodeStringValue(cx, nativeSQL_jsv);
-	if (nativeSQL == NULL) {
-		ret = JS_FALSE;
-		JS_Log(JS_LOG_ERR, "Failed to convert the SQL query\n");
-		goto out;
-	}
-
-	MYSQL *mysql = (MYSQL *)JS_GetPrivate(JSVAL_TO_OBJECT(conn));
-	if (mysql == NULL) {
-		free(nativeSQL);
-		ret = JS_FALSE;
-		JS_Log(JS_LOG_ERR, "Failed to get MYSQL property\n");
-		goto out;
-	}
+	duk_get_prop_string(ctx, -1, "connection");
+	MYSQL *mysql = (MYSQL *)duk_get_pointer(ctx, -1);
+	duk_pop(ctx);
+	if (mysql == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "MYSQL property is not set\n");
 
 	struct prepared_statement *pstmt = malloc(sizeof(struct prepared_statement));
-	if (mysql == NULL) {
-		free(nativeSQL);
-		ret = JS_FALSE;
-		JS_Log(JS_LOG_ERR, "Failed to get MYSQL property\n");
-		goto out;
-	}
+
 	memset(pstmt, 0, sizeof(struct prepared_statement));
 
 	pstmt->stmt = mysql_stmt_init(mysql);
 	if (pstmt->stmt == NULL) {
-		free(nativeSQL);
-		nativeSQL = NULL;
 		free(pstmt);
-		pstmt = NULL;
-		ret = JS_FALSE;
-		JS_Log(JS_LOG_ERR, "Failed to initialize statement\n");
-		goto out;
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
 	}
 
 	if (mysql_stmt_prepare(pstmt->stmt, nativeSQL, strlen(nativeSQL))) {
-		JS_Log(JS_LOG_ERR, "Failed to prepare statement: %s\n", mysql_stmt_error(pstmt->stmt));
-		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
-		free(nativeSQL);
-		nativeSQL = NULL;
 		free(pstmt);
-		pstmt = NULL;
-		ret = JS_FALSE;
-
-		goto out;
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
 	}
 
 	pstmt->p_len = mysql_stmt_param_count(pstmt->stmt);
@@ -243,22 +212,26 @@ Mysql_setStatement(JSContext *cx, unsigned argc, jsval *vp, jsval obj)
 		memset(pstmt->r_bind, 0, pstmt->r_len * sizeof(MYSQL_BIND));
 		pstmt->r_bind_len = malloc(pstmt->r_len * sizeof(*(pstmt->r_bind_len)));
 		assert(pstmt->r_bind_len);
-		pstmt->r_is_null = malloc(pstmt->r_len * sizeof(my_bool));
+		pstmt->r_is_null = malloc(pstmt->r_len * sizeof(bool));
 		assert(pstmt->r_is_null);
 	}
 
-	unsigned int i;
 	for (i = 0; i < pstmt->r_len; i++) {
 		pstmt->r_bind[i].length = &pstmt->r_bind_len[i];
 		pstmt->r_bind[i].is_null = &pstmt->r_is_null[i];
 	}
 
-	JS_SetPrivate(JSVAL_TO_OBJECT(obj), pstmt);
-	free(nativeSQL);
+	/* Remove the connection object */
+	duk_pop(ctx);
 
-out:
-	return ret;
+	/* Add property to the given PreparedStatement object */
+	duk_push_pointer(ctx, (void *) pstmt);
+	duk_put_prop_string(ctx, -2, "pstmt");
+
+	return 1;
 }
+
+#if 0
 
 /* }}} MysqlPreparedGeneratedKeys */
 
@@ -408,12 +381,31 @@ static JSBool MysqlPreparedResultSet_next(JSContext *cx, unsigned argc, jsval *v
 	return JS_FALSE;
 }
 
-static JSFunctionSpec MysqlPreparedResultSet_functions[] = {
-	JS_FS("getNumber", MysqlPreparedResultSet_getNumber, 1, 0),
-	JS_FS("getString", MysqlPreparedResultSet_getString, 1, 0),
-	JS_FS("next", MysqlPreparedResultSet_next, 0, 0),
-	JS_FS_END
+#endif
+
+static int MysqlPreparedResultSet_getNumber(duk_context *ctx)
+{
+	return 0;
+}
+
+static int MysqlPreparedResultSet_getString(duk_context *ctx)
+{
+	return 0;
+}
+
+static int MysqlPreparedResultSet_next(duk_context *ctx)
+{
+	return 0;
+}
+
+static duk_function_list_entry MysqlPreparedResultSet_functions[] = {
+	{"getNumber",	MysqlPreparedResultSet_getNumber,	1},
+	{"getString",	MysqlPreparedResultSet_getString,	1},
+	{"next",	MysqlPreparedResultSet_next,		0},
+	{NULL,		NULL, 					0}
 };
+
+#if 0
 
 /* }}} MysqlPreparedResultSet */
 
@@ -432,19 +424,18 @@ static void MysqlPreparedStatement_finalize(JSFreeOp *fop, JSObject *obj)
 		clear_statement(pstmt);
 }
 
-static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statement *pstmt)
+#endif
+
+static int prepared_statement_execute(duk_context *ctx, struct prepared_statement *pstmt)
 {
 	unsigned int i;
 
-	if (pstmt->p_len && mysql_stmt_bind_param(pstmt->stmt, pstmt->p_bind)) {
-		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
-		return JS_FALSE;
-	}
+	if (pstmt->p_len && mysql_stmt_bind_param(pstmt->stmt, pstmt->p_bind))
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
 
 	if (mysql_stmt_execute(pstmt->stmt)) {
-		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 		clear_statement(pstmt);
-		return JS_FALSE;
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
 	}
 
 	for (i = 0; i < pstmt->p_len; i++)
@@ -455,13 +446,14 @@ static JSBool prepared_statement_execute(JSContext *cx, struct prepared_statemen
 	pstmt->p_bind = NULL;
 
 	if (pstmt->r_len && mysql_stmt_bind_result(pstmt->stmt, pstmt->r_bind)) {
-		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
 		clear_statement(pstmt);
-		return JS_FALSE;
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
 	}
 
-	return JS_TRUE;
+	return 1;
 }
+
+#if 0
 
 static JSBool prepared_statement_get_result_set(JSContext *cx, struct prepared_statement *pstmt, jsval *rval)
 {
@@ -485,119 +477,6 @@ static JSBool prepared_statement_get_result_set(JSContext *cx, struct prepared_s
 	*rval = OBJECT_TO_JSVAL(robj);
 
 out:
-	return JS_TRUE;
-}
-
-static JSBool MysqlStatement_execute(JSContext *cx, unsigned argc, jsval *vp)
-{
-	jsval this = JS_THIS(cx, vp);
-	jsval ret = JSVAL_TRUE;
-
-	if (argc < 0 || argc > 2) {
-		JS_Log(JS_LOG_WARNING, "Wrong number of arguments\n");
-		ret = JSVAL_FALSE;
-		goto out;
-	}
-
-	if (argc > 0) {
-		/* if there is an old statement clear the memory */
-		struct prepared_statement *pstmt =
-			(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-		if (pstmt)
-			clear_statement(pstmt);
-
-		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
-			ret = JSVAL_FALSE;
-			goto out;
-		}
-	}
-
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-
-	if (pstmt == NULL) {
-		JS_Log(JS_LOG_ERR, "The statement property is not set\n");
-		return JS_FALSE;
-	}
-
-	if (!prepared_statement_execute(cx, pstmt))
-		return JS_FALSE;
-
-	ret = BOOLEAN_TO_JSVAL(pstmt->r_len > 0);
-
-out:
-	JS_SET_RVAL(cx, vp, ret);
-	return JS_TRUE;
-}
-
-static JSBool MysqlStatement_executeQuery(JSContext *cx, unsigned argc, jsval *vp)
-{
-	jsval this = JS_THIS(cx, vp);
-
-	/* if it is a simple statement set the SQL command*/
-	if (argc == 1) {
-		/* if there is an old statement clear the memory */
-		struct prepared_statement *pstmt =
-			(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-		if (pstmt)
-			clear_statement(pstmt);
-
-		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
-			JS_SET_RVAL(cx, vp, JSVAL_NULL);
-			goto out;
-		}
-	}
-
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-
-	if (pstmt == NULL) {
-		JS_Log(JS_LOG_ERR, "The statement property is not set\n");
-		goto out;
-	}
-
-	if (!prepared_statement_execute(cx, pstmt))
-		goto out;
-
-	prepared_statement_get_result_set(cx, pstmt, &JS_RVAL(cx, vp));
-	return JS_TRUE;
-
-out:
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-	return JS_TRUE;
-}
-
-static JSBool MysqlStatement_executeUpdate(JSContext *cx, unsigned argc, jsval *vp)
-{
-	jsval this = JS_THIS(cx, vp);
-	jsval rval = JS_NumberValue(-1);
-
-	/* if it is a simple statement set the SQL command*/
-	if (argc > 0) {
-		/* if there is an old statement clear the memory */
-		struct prepared_statement *pstmt =
-			(struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-		if (pstmt)
-			clear_statement(pstmt);
-
-		if (Mysql_setStatement(cx, argc, vp, this) == JS_FALSE) {
-			goto out;
-		}
-	}
-
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-
-	if (pstmt == NULL) {
-		JS_Log(JS_LOG_ERR, "The statement property is not set\n");
-		goto out;
-	}
-
-	if (!prepared_statement_execute(cx, pstmt))
-		goto out;
-
-	my_ulonglong rows = mysql_stmt_affected_rows(pstmt->stmt);
-	rval = JS_NumberValue(rows);
-
-out:
-	JS_SET_RVAL(cx, vp, rval);
 	return JS_TRUE;
 }
 
@@ -639,60 +518,185 @@ out:
 	return JS_TRUE;
 }
 
-static JSBool MysqlStatement_getResultSet(JSContext *cx, unsigned argc, jsval *vp)
+#endif
+
+static int MysqlStatement_execute(duk_context *ctx)
 {
-	jsval this = JS_THIS(cx, vp);
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	/* TODO auto-generated keys */
+	int argc = duk_get_top(ctx);
 
-	if (pstmt == NULL) {
-		JS_Log(JS_LOG_ERR, "The statement property is not set\n");
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_TRUE;
+	if (argc < 1 || argc > 2)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Wrong number of arguments\n");
+
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt)
+		clear_statement(pstmt);
+
+	/* Must push the Statement object on the stack as it is used by
+	set_statement function */
+	duk_push_this(ctx);
+	if (!set_statement(ctx, duk_get_string(ctx, 0))) {
+		/* TODO error */
+		return DUK_RET_ERROR;
 	}
 
-	if (!pstmt->r_len) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_TRUE;
-	}
+	duk_get_prop_string(ctx, -1, "pstmt");
+	pstmt = duk_get_pointer(ctx, -1);
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
 
-	prepared_statement_get_result_set(cx, pstmt, &JS_RVAL(cx, vp));
-	return JS_TRUE;
+	if (!prepared_statement_execute(ctx, pstmt))
+		duk_push_false(ctx);
+
+	duk_push_boolean(ctx, pstmt->r_len > 0);
+
+	return 1;
 }
 
-static JSBool MysqlStatement_getUpdateCount(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlStatement_executeQuery(duk_context *ctx)
 {
-	jsval this = JS_THIS(cx, vp);
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	/* TODO auto-generated keys */
+	int argc = duk_get_top(ctx);
+
+	if (argc != 1) 
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Wrong number of arguments\n");
+
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt)
+		clear_statement(pstmt);
+
+	/* Must push the Statement object on the stack as it is used by
+	set_statement function */
+	duk_push_this(ctx);
+	if (!set_statement(ctx, duk_get_string(ctx, 0))) {
+		/* TODO error */
+		return DUK_RET_ERROR;
+	}
+
+	duk_get_prop_string(ctx, -1, "pstmt");
+	pstmt = duk_get_pointer(ctx, -1);
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (!prepared_statement_execute(ctx, pstmt))
+		duk_push_null(ctx);
+
+	duk_push_object(ctx);
+	duk_push_pointer(ctx, (void *) pstmt);
+	duk_put_prop_string(ctx, -2, "pstmt");
+	duk_put_function_list(ctx, -1, MysqlPreparedResultSet_functions);
+
+	return 1;
+}
+
+static int MysqlStatement_executeUpdate(duk_context *ctx)
+{
+	/* TODO auto-generated keys */
+	int argc = duk_get_top(ctx);
+
+	if (argc < 1 || argc > 2)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Wrong number of arguments\n");
+
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if(pstmt)
+		clear_statement(pstmt);
+
+	/* Must push the Statement object on the stack as it is used by
+	set_statement function */
+	duk_push_this(ctx);
+	if (!set_statement(ctx, duk_get_string(ctx, 0))) {
+		/* TODO error */
+		return DUK_RET_ERROR;
+	}
+
+	duk_get_prop_string(ctx, -1, "pstmt");
+	pstmt = duk_get_pointer(ctx, -1);
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (!prepared_statement_execute(ctx, pstmt))
+		duk_push_number(ctx, -1);
+
+	my_ulonglong rows = mysql_stmt_affected_rows(pstmt->stmt);
+	duk_push_number(ctx, rows);
+
+	return 1;
+}
+
+static int MysqlStatement_getConnection(duk_context *ctx)
+{
+	duk_push_this(ctx);
+
+	duk_get_prop_string(ctx, -1, "connection");
+
+	return 1;
+}
+
+static int MysqlStatement_getGeneratedKeys(duk_context *ctx)
+{
+	return 0;
+}
+
+static int MysqlStatement_getResultSet(duk_context *ctx)
+{
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (!pstmt->r_len)
+		duk_push_null(ctx);
+
+	duk_push_object(ctx);
+	duk_push_pointer(ctx, (void *) pstmt);
+	duk_put_prop_string(ctx, -2, "pstmt");
+	duk_put_function_list(ctx, -1, MysqlPreparedResultSet_functions);
+
+	return 1;
+}
+
+static int MysqlStatement_getUpdateCount(duk_context *ctx)
+{
 	my_ulonglong rows = -1;
 
-	if (pstmt == NULL) {
-		JS_Log(JS_LOG_ERR, "The statement property is not set\n");
-		goto out;
-	}
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
 
 	if (pstmt->r_len)
 		rows = mysql_stmt_affected_rows(pstmt->stmt);
 
-out:
-	JS_SET_RVAL(cx, vp, JS_NumberValue(rows));
-	return JS_TRUE;
+	duk_push_number(ctx, rows);
+
+	return 1;
 }
 
-static JSBool MysqlStatement_getConnection(JSContext *cx, unsigned argc, jsval *vp)
-{
-	return getConnection(cx, vp);
-}
-
-static JSFunctionSpec MysqlStatement_functions[] = {
-	JS_FS("execute", MysqlStatement_execute, 2, 0),
-	JS_FS("executeQuery", MysqlStatement_executeQuery, 1, 0),
-	JS_FS("executeUpdate", MysqlStatement_executeUpdate, 2, 0),
-	JS_FS("getConnection", MysqlStatement_getConnection, 0, 0),
-	JS_FS("getGeneratedKeys", MysqlStatement_getGeneratedKeys, 0, 0),
-	JS_FS("getResultSet", MysqlStatement_getResultSet, 0, 0),
-	JS_FS("getUpdateCount", MysqlStatement_getUpdateCount, 0, 0),
-	JS_FS_END
+static duk_function_list_entry MysqlStatement_functions[] = {
+	{"execute",		MysqlStatement_execute,			DUK_VARARGS},
+	{"executeQuery",	MysqlStatement_executeQuery,		DUK_VARARGS},
+	{"executeUpdate",	MysqlStatement_executeUpdate,		DUK_VARARGS},
+	{"getConnection",	MysqlStatement_getConnection,		0},
+	{"getGeneratedKeys",	MysqlStatement_getGeneratedKeys,	0},
+	{"getResultSet",	MysqlStatement_getResultSet,		0},
+	{"getUpdateCount",	MysqlStatement_getUpdateCount,		0},
+	{NULL,			NULL, 					0}
 };
+
+#if 0
 
 static JSClass MysqlStatement_class = {
 	"MysqlStatement", JSCLASS_HAS_PRIVATE,
@@ -741,20 +745,124 @@ out_false:
 	return JS_FALSE;
 }
 
-static JSBool MysqlPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsval *vp)
+#endif
+
+static int MysqlPreparedStatement_execute(duk_context *ctx)
 {
-	JSBool ret;
+	int argc = duk_get_top(ctx);
+
+	if (argc != 0)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Wrong number of arguments\n");
+
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (!prepared_statement_execute(ctx, pstmt))
+		duk_push_false(ctx);
+
+	duk_push_boolean(ctx, pstmt->r_len > 0);
+
+	return 1;
+}
+
+static int MysqlPreparedStatement_executeQuery(duk_context *ctx)
+{
+	int argc = duk_get_top(ctx);
+
+	if (argc != 0) 
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Wrong number of arguments\n");
+
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (!prepared_statement_execute(ctx, pstmt))
+		duk_push_null(ctx);
+
+	duk_push_object(ctx);
+	duk_push_pointer(ctx, (void *) pstmt);
+	duk_put_prop_string(ctx, -2, "pstmt");
+	duk_put_function_list(ctx, -1, MysqlPreparedResultSet_functions);
+
+	return 1;
+}
+
+static int MysqlPreparedStatement_executeUpdate(duk_context *ctx)
+{
+	int argc = duk_get_top(ctx);
+
+	if (argc != 0)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Wrong number of arguments\n");
+
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (!prepared_statement_execute(ctx, pstmt))
+		duk_push_number(ctx, -1);
+
+	my_ulonglong rows = mysql_stmt_affected_rows(pstmt->stmt);
+	duk_push_number(ctx, rows);
+
+	return 1;
+}
+
+static int MysqlPreparedStatement_set(duk_context *ctx, struct prepared_statement **pstmt, uint32_t *i)
+{
+	int argc = duk_get_top(ctx);
+
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	*pstmt = (struct prepared_statement *)duk_get_pointer(ctx, -1);
+
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (argc < 1)
+		return 0;
+
+	*i = duk_get_int(ctx, 0);
+
+	if (*i < 1 || *i > (*pstmt)->p_len)
+		return 0;
+
+	(*i)--;
+	if ((*pstmt)->p_bind[*i].buffer) {
+		/* Free previously assigned value (buffer) */
+		free((*pstmt)->p_bind[*i].buffer);
+		/* Prevent second free in prepared_statement_execute()
+		if we never set any other value later */
+		(*pstmt)->p_bind[*i].buffer = NULL;
+	}
+	if (argc < 2 || duk_is_null(ctx, 1)) {
+		(*pstmt)->p_bind[*i].buffer_type = MYSQL_TYPE_NULL;
+		return 0;
+	}
+
+	return 1;
+}
+
+static int MysqlPreparedStatement_setNumber(duk_context *ctx)
+{
 	struct prepared_statement *pstmt;
 	uint32_t i;
 
-	if (!MysqlPreparedStatement_set(cx, argc, vp, &pstmt, &i, &ret))
-		return ret;
+	if (!MysqlPreparedStatement_set(ctx, &pstmt, &i))
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Index is not valid\n");
 
-	double val;
-	if (!JS_ValueToNumber(cx, JS_ARGV(cx, vp)[1], &val)) {
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		return JS_FALSE;
-	}
+	double val = duk_get_number(ctx, 1);
+	if (isnan(val))
+		return DUK_RET_ERROR;
 
 	double *buf = malloc(sizeof(double));
 	assert(buf);
@@ -764,70 +872,44 @@ static JSBool MysqlPreparedStatement_setNumber(JSContext *cx, unsigned argc, jsv
 	pstmt->p_bind[i].buffer = buf;
 	pstmt->p_bind[i].buffer_length = 0;
 
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-	return JS_TRUE;
+	return 0;
 }
 
-static JSBool MysqlPreparedStatement_setString(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlPreparedStatement_setString(duk_context *ctx)
 {
-	JSBool ret;
 	struct prepared_statement *pstmt;
 	uint32_t i;
+	const char *str;
+	size_t len;
 
-	if (!MysqlPreparedStatement_set(cx, argc, vp, &pstmt, &i, &ret))
-		return ret;
+	if (!MysqlPreparedStatement_set(ctx, &pstmt, &i))
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Index is not valid\n");
 
-	JSString *str = JS_ValueToString(cx, JS_ARGV(cx, vp)[1]);
-
-	size_t jslen, clen;
-	const jschar *jsbuf = JS_GetStringCharsAndLength(cx, str, &jslen);
-
-	/* First determine the necessary size for the js buffer.
-	 * This is well documented in jsapi.h, just before the
-	 * prototype for JS_EncodeCharacters().
-	 */
-	if (JS_EncodeCharacters(cx, jsbuf, jslen, NULL, &clen) == JS_FALSE)
-		return ret;
-
-	char *cbuf = malloc(clen);
-	assert(cbuf);
-
-	if (JS_EncodeCharacters(cx, jsbuf, jslen, cbuf, &clen) == JS_FALSE) {
-		free(cbuf);
-		return ret;
-	}
+	str = duk_to_string(ctx, 1);
+	str = duk_get_lstring(ctx, 1, &len);
 
 	pstmt->p_bind[i].buffer_type = MYSQL_TYPE_STRING;
-	pstmt->p_bind[i].buffer = cbuf;
-	pstmt->p_bind[i].buffer_length = clen;
+	pstmt->p_bind[i].buffer = malloc(len);
+	memcpy(pstmt->p_bind[i].buffer, str, len);
+	pstmt->p_bind[i].buffer_length = len;
 
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-	return JS_TRUE;
+	return 0;
 }
 
-static JSFunctionSpec MysqlPreparedStatement_functions[] = {
-	JS_FS("execute", MysqlStatement_execute, 0, 0),
-	JS_FS("executeQuery", MysqlStatement_executeQuery, 0, 0),
-	JS_FS("executeUpdate", MysqlStatement_executeUpdate, 0, 0),
-	JS_FS("getConnection", MysqlStatement_getConnection, 0, 0),
-	JS_FS("getGeneratedKeys", MysqlStatement_getGeneratedKeys, 0, 0),
-	JS_FS("getResultSet", MysqlStatement_getResultSet, 0, 0),
-	JS_FS("getUpdateCount", MysqlStatement_getUpdateCount, 0, 0),
-	JS_FS("setNumber", MysqlPreparedStatement_setNumber, 2, 0),
-	JS_FS("setString", MysqlPreparedStatement_setString, 2, 0),
-	JS_FS_END
-};
-
-static JSClass MysqlPreparedStatement_class = {
-	"MysqlPreparedStatement", JSCLASS_HAS_PRIVATE,
-	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, MysqlPreparedStatement_finalize,
+static duk_function_list_entry MysqlPreparedStatement_functions[] = {
+	{"execute",		MysqlPreparedStatement_execute,		0},
+	{"executeQuery",	MysqlPreparedStatement_executeQuery,		0},
+	{"executeUpdate",	MysqlPreparedStatement_executeUpdate,	0},
+	{"setNumber",		MysqlPreparedStatement_setNumber,	2},
+	{"setString",		MysqlPreparedStatement_setString,	2},
+	{NULL,			NULL,					0}
 };
 
 /* }}} MysqlPreparedStatement */
 
 /* {{{ MysqlConnection */
 
+#if 0
 /**
  * MysqlConnection_finalize - cleanup function for MysqlConnection objects
  * @cx: JavaScript context
@@ -843,106 +925,122 @@ static void MysqlConnection_finalize(JSFreeOp *fop, JSObject *obj)
 	}
 }
 
-static JSClass MysqlConnection_class = {
-	"MysqlConnection", JSCLASS_HAS_PRIVATE,
-	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, MysqlConnection_finalize,
-};
+#endif
 
-static JSBool MysqlConnection_createStatement(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlConnection_createStatement(duk_context *ctx)
 {
-	return createStatement(cx, vp, &MysqlStatement_class, MysqlStatement_functions);
+	/* Create MySQL Statement object */
+	duk_push_object(ctx);
+
+	duk_get_global_string(ctx, "MysqlStatement");
+	duk_set_prototype(ctx, -2);
+
+	/* Add connection property */
+	duk_push_this(ctx);
+	duk_put_prop_string(ctx, -2, "connection");
+
+	return 1;
 }
 
-static JSBool MysqlConnection_nativeSQL(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlConnection_nativeSQL(duk_context *ctx)
 {
-	return nativeSQL(cx, argc, vp);
+	int argc = duk_get_top(ctx);
+
+	if (argc != 1)
+		return DUK_RET_ERROR;
+
+	duk_to_string(ctx, 0);
+
+	/* duk_to_string also replaces the value at idx with ToString(val) */
+	duk_dup(ctx, 0);
+
+	return 1;
 }
 
-static JSBool MysqlConnection_prepareStatement(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlConnection_prepareStatement(duk_context *ctx)
 {
-	jsval rval = JSVAL_NULL;
+	int argc = duk_get_top(ctx);
 
-	if (argc < 1 || argc > 2) {
-		JS_Log(JS_LOG_WARNING, "Wrong number of arguments\n");
-		goto out;
+	if (argc < 1 || argc > 2)
+		return DUK_RET_ERROR;
+
+	/* Create MySQL Prepared Statement object */
+	duk_push_object(ctx);
+
+	duk_get_global_string(ctx, "MysqlPreparedStatement");
+	duk_set_prototype(ctx, -2);
+
+	/* Add connection property */
+	duk_push_this(ctx);
+	duk_put_prop_string(ctx, -2, "connection");
+
+	/* Mysql_setStatement uses the duktape stack for the PreparedStatement object
+	and receives also the query as a normal param. It will simply add the prepared_statement
+	struct as a property to the PreparedStatement object.*/
+	if (!Mysql_setStatement(ctx, duk_get_string(ctx, 0))) {
+		/* TODO error */
+		return DUK_RET_ERROR;
 	}
+	/* TODO autogenerated keys */
 
-	JSObject *robj = JS_NewObject(cx, &MysqlPreparedStatement_class, NULL, NULL);
-	if (robj == NULL) {
-		JS_ReportError(cx, "Failed to create a new object\n");
-		JS_Log(JS_LOG_ERR, "Failed to create a new object\n");
-		goto out;
-	}
-
-	JS_DefineProperty(cx, robj, "connection", JS_THIS(cx, vp), NULL, NULL, JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT);
-	if (JS_DefineFunctions(cx, robj, MysqlPreparedStatement_functions) == JS_FALSE) {
-		JS_ReportError(cx, "Failed to define functions\n");
-		JS_Log(JS_LOG_ERR, "Failed to define functions\n");
-		goto out;
-	}
-
-	if (Mysql_setStatement(cx, argc, vp, OBJECT_TO_JSVAL(robj)) == JS_FALSE)
-		goto out;
-
-	rval = OBJECT_TO_JSVAL(robj);
-
-out:
-	JS_SET_RVAL(cx, vp, rval);
-	return JS_TRUE;
+	return 1;
 }
 
-static JSFunctionSpec MysqlConnection_functions[] = {
-	JS_FS("createStatement", MysqlConnection_createStatement, 0, 0),
-	JS_FS("nativeSQL", MysqlConnection_nativeSQL, 1, 0),
-	JS_FS("prepareStatement", MysqlConnection_prepareStatement, 1, 0),
-	JS_FS_END
+
+static duk_function_list_entry MysqlConnection_functions[] = {
+	{"createStatement",	MysqlConnection_createStatement,	0},
+	{"nativeSQL",		MysqlConnection_nativeSQL,		1},
+	{"prepareStatement",	MysqlConnection_prepareStatement,	DUK_VARARGS},
+	{NULL,			NULL,					0}
 };
 
 /* }}} MysqlConnection */
 
 /* {{{ MysqlDriver */
 
-static JSBool MysqlDriver_acceptsURL(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlDriver_acceptsURL(duk_context *ctx)
 {
-	char *url = JS_EncodeStringValue(cx, JS_ARGV(cx, vp)[0]);
+	const char *url = duk_safe_to_string(ctx, 0);
 
-	JS_Log(JS_LOG_INFO, "mysql check: '%s'\n", url);
 	if (strncmp(url, "mysql://", 8))
-		JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+		duk_push_false(ctx);
 	else
-		JS_SET_RVAL(cx, vp, JSVAL_TRUE);
-	JS_free(cx, url);
+		duk_push_true(ctx);
 
-	return JS_TRUE;
+	return 1;
 }
 
-static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlDriver_connect(duk_context *ctx)
 {
-	JSBool ret = JS_FALSE;
-	jsval rval = JSVAL_NULL;
-	if (!argc)
-		goto out;
-
-	/* If we can't parse the URL, just return NULL (but no error) to
-	 * allow the DriverManager code to try the next driver */
-	ret = JS_TRUE;
-
-	char *url = JS_EncodeStringValue(cx, JS_ARGV(cx, vp)[0]);
-	if (strncmp(url, "mysql://", 8))
-		goto out_clean;
-
-	char *host = url + 8;
-	char *db = host + strcspn(host, "/:");
+	int argc = duk_get_top(ctx);
+	char *db, *host, *port_str;
+	const char *url;
 	unsigned int port = 3306;
-	char *port_str;
+	const char *user = NULL;
+	const char *password = NULL;
+
+	if (!argc)
+		return DUK_RET_ERROR;
+
+	url = duk_safe_to_string(ctx, 0);
+	/* It is a different kind of driver, so we return null and it can retry with another */
+	if (strncmp(url, "mysql://", 8)) {
+		duk_push_null(ctx);
+		return 1;
+	}
+
+	host = strdup(url + 8);
+	db = host + strcspn(host, "/:");
 
 	switch (*db) {
 	case ':':
 		port_str = ++db;
 		db += strcspn(db, "/");
-		if (*db != '/')
-			goto out_clean;
+		if (*db != '/') {
+			free(host);
+			duk_push_null(ctx);
+			return 1;
+		}
 		*(db++) = '\0';
 		port = atoi(port_str);
 		break;
@@ -950,100 +1048,99 @@ static JSBool MysqlDriver_connect(JSContext *cx, unsigned argc, jsval *vp)
 		*(db++) = '\0';
 		break;
 	default:
-		goto out_clean;
+		free(host);
+		duk_push_null(ctx);
+		return 1;
 	}
 
-	char *user = NULL, *passwd = NULL;
-	if (argc > 1 && !JSVAL_IS_PRIMITIVE(JS_ARGV(cx, vp)[1]) && !JSVAL_IS_NULL(JS_ARGV(cx, vp)[1])) {
-		JSObject *info = JSVAL_TO_OBJECT(JS_ARGV(cx, vp)[1]);
-		jsval user_jsv, passwd_jsv;
+	if (argc > 1 && duk_is_object(ctx, 1)) {
 
-		if (JS_GetProperty(cx, info, "user", &user_jsv) && !JSVAL_IS_NULL(user_jsv)) {
-			JSString *user_str = JS_ValueToString(cx, user_jsv);
-			user = JS_EncodeString(cx, user_str);
-		}
+		duk_get_prop_string(ctx, 1, "user");
 
-		if (JS_GetProperty(cx, info, "password", &passwd_jsv) && !JSVAL_IS_NULL(passwd_jsv)) {
-			JSString *passwd_str = JS_ValueToString(cx, passwd_jsv);
-			passwd = JS_EncodeString(cx, passwd_str);
-		}
+		if (!duk_is_undefined(ctx, -1))
+			user = duk_safe_to_string(ctx, -1);
+
+		duk_get_prop_string(ctx, 1, "password");
+
+		if (!duk_is_undefined(ctx, -1))
+			password = duk_safe_to_string(ctx, -1);
 	}
 
 	MYSQL *mysql = mysql_init(NULL);
-	MYSQL *conn = mysql_real_connect(mysql, host, user, passwd, db, port, NULL, 0);
+	MYSQL *conn = mysql_real_connect(mysql, host, user, password, db, port, NULL, 0);
 
-	if (user != NULL)
-		JS_free(cx, user);
-	if (passwd != NULL)
-		JS_free(cx, passwd);
+	free(host);
 
 	if (!conn) {
-		ret = JS_FALSE;
-		JS_ReportError(cx, "%s", mysql_error(mysql));
+		/* This call never returns */
 		mysql_close(mysql);
-		goto out_clean;
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_error(mysql));
 	}
 
 	if (mysql_set_character_set(mysql, "utf8") != 0) {
-		ret = JS_FALSE;
-		JS_ReportError(cx, "Failed to set the character set for the connector\n");
-		JS_Log(JS_LOG_ERR, "Failed to set the character set for the connector\n");
-		goto out_clean;
+		mysql_close(mysql);
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Failed to set the character set for the connector\n");
 	}
 
-	/* Connection is successful. Create a new connection object and
-	 * link the mysql object to it. */
-	JSObject *robj =  JS_NewObject(cx, &MysqlConnection_class, NULL, NULL);
-	if (robj == NULL) {
-		ret = JS_FALSE;
-		JS_ReportError(cx, "Failed to create a new object\n");
-		JS_Log(JS_LOG_ERR, "Failed to create a new object\n");
-		goto out_clean;
-	}
+	/* Create Connection object */
+	duk_push_object(ctx);
 
-	JS_SetPrivate(robj, mysql);
+	duk_get_global_string(ctx, "MysqlConnection");
+	duk_set_prototype(ctx, -2);
 
-	if (JS_DefineFunctions(cx, robj, MysqlConnection_functions) == JS_FALSE) {
-		ret = JS_FALSE;
-		JS_ReportError(cx, "Failed to define functions for MysqlConnection class\n");
-		JS_Log(JS_LOG_ERR, "Failed to define functions\n");
-		goto out_clean;
-	}
-	rval = OBJECT_TO_JSVAL(robj);
+	duk_push_pointer(ctx, (void *) mysql);
+	duk_put_prop_string(ctx, -2, "connection");
 
-out_clean:
-	JS_free(cx, url);
-out:
-	JS_SET_RVAL(cx, vp, rval);
-	return ret;
+	return 1;
 }
 
-#if 0
-static JSClass MysqlDriver_class = {
-	"MysqlDriver", 0,
-	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
-};
-#endif
-
-static JSFunctionSpec MysqlDriver_functions[] = {
-	JS_FS("acceptsURL", MysqlDriver_acceptsURL, 1, 0),
-	JS_FS("connect", MysqlDriver_connect, 2, 0),
-	JS_FS_END
+static duk_function_list_entry MysqlDriver_functions[] = {
+	{"acceptsURL",	MysqlDriver_acceptsURL,	1},
+	{"connect",	MysqlDriver_connect,	2},
+	{NULL,		NULL,			0}
 };
 
 /* }}} MysqlDriver */
 
-JSBool JS_MysqlConstructAndRegister(JSContext *cx, JSObject *global)
+duk_bool_t js_mysql_construct_and_register(duk_context *ctx)
 {
-	JSObject *obj = JS_NewObject(cx, NULL, NULL, NULL);
+	int rc;
 
-	if (!JS_DefineFunctions(cx, obj, MysqlDriver_functions))
-		return JS_FALSE;
+	/* Create MysqlConnection "class" */
+	duk_push_object(ctx);
+	duk_put_function_list(ctx, -1, MysqlConnection_functions);
+	duk_put_global_string(ctx, "MysqlConnection");
 
-	return JS_SqlRegisterDriver(cx, global, obj);
+	/* Create MysqlStatement "class" */
+	duk_push_object(ctx);
+
+	duk_get_global_string(ctx, "Statement");
+	duk_set_prototype(ctx, -2);
+
+	duk_put_function_list(ctx, -1, MysqlStatement_functions);
+	duk_put_global_string(ctx, "MysqlStatement");
+
+	/* Create MysqlPreparedStatement "class" */
+	duk_push_object(ctx);
+
+	duk_get_global_string(ctx, "MysqlStatement");
+	duk_set_prototype(ctx, -2);
+
+	duk_put_function_list(ctx, -1, MysqlPreparedStatement_functions);
+	duk_put_global_string(ctx, "MysqlPreparedStatement");
+
+	/* Create MySQL Driver object */
+	duk_push_object(ctx);
+	duk_put_function_list(ctx, -1, MysqlDriver_functions);
+	duk_put_global_string(ctx, "MysqlDriver");
+
+	/* Register driver to DriverManager */
+	duk_get_global_string(ctx, "DriverManager");
+	duk_push_string(ctx, "registerDriver");
+	duk_get_global_string(ctx, "MysqlDriver");
+	rc = duk_pcall_prop(ctx, -3, 1);
+
+	return !rc;
 }
 
 // vim: foldmethod=marker
-
-#endif

@@ -3,12 +3,6 @@
 #ifndef jsmysql_h___
 #define jsmysql_h___
 
-#if 0
-
-#include <jsapi.h>
-
-JSBool JS_MysqlConstructAndRegister(JSContext *cx, JSObject *global);
-
-#endif
+duk_bool_t js_mysql_construct_and_register(duk_context *ctx);
 
 #endif
