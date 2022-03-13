@@ -1,8 +1,9 @@
-Library: LibJSSql
+Library: libjssql
 Homepage: https://github.com/mindbit/libjssql
-Bug reports: 
-License: GNU Lesser General Public License
+Bug reports: https://github.com/mindbit/libjssql/issues
+License: MIT
 
-Primary developers:
-Radu Rendec
-Claudiu Olteanu
+Authors:
+Radu Rendec <radu.rendec@mindbit.ro>
+Anca Rosculete <anca.rosculete@gmail.com>
+Claudiu Olteanu <olteanu.claudiu@ymail.com>
