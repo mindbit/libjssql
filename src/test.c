@@ -12,15 +12,7 @@
 #include "jsmysql.h"
 #include "jspgsql.h"
 
-/* The class of the global object. */
-static JSClass global_class = {
-	"global", JSCLASS_GLOBAL_FLAGS,
-	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
-	JSCLASS_NO_OPTIONAL_MEMBERS
-};
-
-static int run_test(char *source, JSContext *cx, JSObject *global)
+static int run_test(char *source, duk_context *ctx)
 {
 	int fd;
 	void *buf;
@@ -28,81 +20,60 @@ static int run_test(char *source, JSContext *cx, JSObject *global)
 
 	fd = open(source, O_RDONLY, 0);
 	if (fd < 0)
-		return -1;
+		return 1;
 
 	len = lseek(fd, 0, SEEK_END);
 	buf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
 
-	jsval rval;
-	uint lineno = 0;
+	duk_push_lstring(ctx, buf, len);
+	duk_push_string(ctx, source);
+	if (duk_pcompile(ctx, 0))
+		return 1;
 
-	JS_EvaluateScript(cx, global, buf, len, source, lineno, &rval);
+	if (duk_pcall(ctx, 0)) {
+		if (duk_is_error(ctx, -1)) {
+			duk_get_prop_string(ctx, -1, "stack");
+			printf("error: %s\n", duk_safe_to_string(ctx, -1));
+		}
+		return 1;
+	}
 
 	munmap(buf, len);
 	close(fd);
-	if (JSVAL_IS_INT(rval))
-		return JSVAL_TO_INT(rval);
 
-	return -1;
+	return 0;
 }
 
 int main(int argc, const char *argv[])
 {
-	/* JSAPI variables. */
-	JSRuntime *rt;
-	JSContext *cx;
-	JSObject  *global;
 
-	JS_SetCStringsAreUTF8();
+	duk_context *ctx = NULL;
 
-	/* Create a JS runtime. You always need at least one runtime per process. */
-	rt = JS_NewRuntime(8 * 1024 * 1024);
-	if (rt == NULL)
+	ctx = duk_create_heap(NULL, NULL, NULL, NULL, NULL);
+	if (!ctx)
 		return 1;
 
-	/*
-	 * Create a context. You always need a context per thread.
-	 * Note that this program is not multi-threaded.
-	 */
-	cx = JS_NewContext(rt, 8192);
-	if (cx == NULL)
-		return 1;
-	JS_SetOptions(cx, JSOPTION_VAROBJFIX | JSOPTION_METHODJIT);
-	JS_SetVersion(cx, JSVERSION_LATEST);
-	JS_MiscSetErrorReporter(cx);
+	duk_push_global_object(ctx);
 
-	/*
-	 * Create the global object in a new compartment.
-	 * You always need a global object per context.
-	 */
-	JS_BeginRequest(cx); // needed by js-17.0.0 DEBUG
-	global = JS_NewGlobalObject(cx, &global_class, NULL); // works with js-17.0.0
-	//global = JS_NewGlobalObject(cx, &global_class); // compiles with js-1.8.5, but segfaults
-	//global = JS_NewCompartmentAndGlobalObject(cx, &global_class, NULL); // works with js-1.8.5
-	if (global == NULL)
+	if (!js_misc_init(ctx, -1))
 		return 1;
 
-	/*
-	 * Populate the global object with the standard JavaScript
-	 * function and object classes, such as Object, Array, Date.
-	 */
-	if (!JS_InitStandardClasses(cx, global))
+	if (!js_sql_init(ctx))
 		return 1;
 
-	JS_MiscInit(cx, global);
+	int ret_mysql = 0;
 
-	if (!JS_SqlInit(cx, global))
-		return 1;
-
-	int ret_mysql = 0, ret_postgres = 0;
 
 #ifdef HAVE_MYSQL
 	printf ("[Running mysql tests]\n");
-	JS_MysqlConstructAndRegister(cx, global);
-	ret_mysql = run_test("test_mysql.js", cx, global);
+	if(!js_mysql_construct_and_register(ctx))
+		return 1;
+	ret_mysql = run_test("test_mysql.js", ctx);
 	printf("----------------------------------------------------\n");
 	printf("\n%s: test_mysql\n", (ret_mysql == 0)? "PASS" : "FAIL");
 #endif
+
+#if 0
 
 #ifdef HAVE_POSTGRESQL
 	printf ("\n[Running postgresql tests]\n");
@@ -111,14 +82,13 @@ int main(int argc, const char *argv[])
 	printf("----------------------------------------------------\n");
 	printf("\n%s: test_postgres\n\n", (ret_postgres == 0)? "PASS" : "FAIL");
 #endif
-	JS_EndRequest(cx); // needed by js-17.0.0 DEBUG
+}
 
-	/* End of your application code */
+#endif
 
-	/* Clean things up and shut down SpiderMonkey. */
-	JS_DestroyContext(cx);
-	JS_DestroyRuntime(rt);
-	JS_ShutDown();
+	duk_pop(ctx);
 
-	return ret_mysql && ret_postgres;
+	duk_destroy_heap(ctx);
+
+	return 0;
 }

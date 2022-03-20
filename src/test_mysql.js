@@ -1,10 +1,10 @@
 // create table people(id int unsigned not null auto_increment primary key, name varchar(40), age int);
 
 function test() {
-	var conn, query, stmt, pstmt, rs, i = 0;
-
+	var conn;
 	conn = DriverManager.getConnection("mysql://127.0.0.1/test_js_sql", "test_js_sql", "123456");
 
+	/*
 	query = "INSERT INTO people(name, age) VALUES (?,?)";
 	println("Executing prepared statement: ", query);
 	pstmt = conn.prepareStatement(query);
@@ -29,6 +29,8 @@ function test() {
 	stmt.executeUpdate("DELETE FROM people");
 
 	println("Test complete");
+	*/
+
 	return 0;
 }
 
