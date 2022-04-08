@@ -9,9 +9,15 @@
 #include <assert.h>
 #include <jsmisc.h>
 
+#include "config.h"
 #include "jsmysql.h"
 #include "jssql.h"
 #include "jscommon.h"
+
+/* In recent versions of MySQL, the my_bool type no longer exists.
+But in MariaDB it still exists. We want our code to be compatible
+with both, so we use autoconf to detect whether the my_bool type is
+defined and alias it to bool otherwise. */
 
 struct prepared_statement {
 	MYSQL_STMT *stmt;
@@ -24,7 +30,7 @@ struct prepared_statement {
 	MYSQL_BIND *r_bind;
 	unsigned int r_len;
 	unsigned long *r_bind_len;
-	bool *r_is_null;
+	my_bool *r_is_null;
 };
 
 struct generated_keys {
@@ -212,7 +218,7 @@ static int Mysql_setStatement(duk_context *ctx, const char *query)
 		memset(pstmt->r_bind, 0, pstmt->r_len * sizeof(MYSQL_BIND));
 		pstmt->r_bind_len = malloc(pstmt->r_len * sizeof(*(pstmt->r_bind_len)));
 		assert(pstmt->r_bind_len);
-		pstmt->r_is_null = malloc(pstmt->r_len * sizeof(bool));
+		pstmt->r_is_null = malloc(pstmt->r_len * sizeof(my_bool));
 		assert(pstmt->r_is_null);
 	}
 

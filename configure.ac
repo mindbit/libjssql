@@ -84,6 +84,17 @@ AM_CONDITIONAL(HAVE_MYSQL, test x$found_mysql = xyes)
 if test -z "$found_mysql" ; then
     found_mysql=no
 fi
+if test x$found_mysql = xyes ; then
+    OLD_CFLAGS="$CFLAGS"
+    CFLAGS="$CFLAGS $MYSQL_CFLAGS"
+    AC_CHECK_TYPE([my_bool],[],[
+        AC_DEFINE_UNQUOTED([my_bool],[bool],
+                           [Define to `bool' if <mysql.h> does not define.])
+    ],[
+#include <mysql.h>
+])
+    CFLAGS="$OLD_CFLAGS"
+fi
 
 #
 # test for postgres
