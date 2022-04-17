@@ -445,25 +445,25 @@ static JSBool MysqlPreparedResultSet_next(JSContext *cx, unsigned argc, jsval *v
 
 #endif
 
-static int MysqlPreparedResultSet_getNumber(duk_context *ctx)
+static int MysqlResultSet_getNumber(duk_context *ctx)
 {
 	return 0;
 }
 
-static int MysqlPreparedResultSet_getString(duk_context *ctx)
+static int MysqlResultSet_getString(duk_context *ctx)
 {
 	return 0;
 }
 
-static int MysqlPreparedResultSet_next(duk_context *ctx)
+static int MysqlResultSet_next(duk_context *ctx)
 {
 	return 0;
 }
 
-static duk_function_list_entry MysqlPreparedResultSet_functions[] = {
-	{"getNumber",	MysqlPreparedResultSet_getNumber,	1},
-	{"getString",	MysqlPreparedResultSet_getString,	1},
-	{"next",	MysqlPreparedResultSet_next,		0},
+static duk_function_list_entry MysqlResultSet_functions[] = {
+	{"getNumber",	MysqlResultSet_getNumber,	1},
+	{"getString",	MysqlResultSet_getString,	1},
+	{"next",	MysqlResultSet_next,		0},
 	{NULL,		NULL, 					0}
 };
 
@@ -616,10 +616,15 @@ static int MysqlStatement_executeQuery(duk_context *ctx)
 
 	execute_statement(ctx, pstmt);
 
+
+	/* Create MySQL Result Set object */
 	duk_push_object(ctx);
+
+	duk_get_global_string(ctx, "MysqlResultSet");
+	duk_set_prototype(ctx, -2);
+
 	duk_push_pointer(ctx, (void *) pstmt);
 	duk_put_prop_string(ctx, -2, "pstmt");
-	duk_put_function_list(ctx, -1, MysqlPreparedResultSet_functions);
 
 	return 1;
 }
@@ -686,10 +691,14 @@ static int MysqlStatement_getResultSet(duk_context *ctx)
 	if (!pstmt->r_len)
 		duk_push_null(ctx);
 
+	/* Create MySQL Result set object */
 	duk_push_object(ctx);
+
+	duk_get_global_string(ctx, "MysqlPreparedStatement");
+	duk_set_prototype(ctx, -2);
+
 	duk_push_pointer(ctx, (void *) pstmt);
 	duk_put_prop_string(ctx, -2, "pstmt");
-	duk_put_function_list(ctx, -1, MysqlPreparedResultSet_functions);
 
 	return 1;
 }
@@ -812,10 +821,14 @@ static int MysqlPreparedStatement_executeQuery(duk_context *ctx)
 
 	execute_statement(ctx, pstmt);
 
+	/* Create MySQL Result Set object */
 	duk_push_object(ctx);
+
+	duk_get_global_string(ctx, "MysqlResultSet");
+	duk_set_prototype(ctx, -2);
+
 	duk_push_pointer(ctx, (void *) pstmt);
 	duk_put_prop_string(ctx, -2, "pstmt");
-	duk_put_function_list(ctx, -1, MysqlPreparedResultSet_functions);
 
 	return 1;
 }
@@ -1095,6 +1108,11 @@ static duk_function_list_entry MysqlDriver_functions[] = {
 duk_bool_t js_mysql_construct_and_register(duk_context *ctx)
 {
 	int rc;
+
+	/* Create MysqlResultSet "class" */
+	duk_push_object(ctx);
+	duk_put_function_list(ctx, -1, MysqlResultSet_functions);
+	duk_put_global_string(ctx, "MysqlResultSet");
 
 	/* Create MysqlConnection "class" */
 	duk_push_object(ctx);
