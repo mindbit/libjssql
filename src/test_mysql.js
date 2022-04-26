@@ -4,7 +4,6 @@ function test() {
 	var conn;
 	conn = DriverManager.getConnection("mysql://127.0.0.1/test_js_sql", "test_js_sql", "123456");
 
-	/*
 	query = "INSERT INTO people(name, age) VALUES (?,?)";
 	println("Executing prepared statement: ", query);
 	pstmt = conn.prepareStatement(query);
@@ -12,6 +11,8 @@ function test() {
 	pstmt.setNumber(2, 30);
 	i = pstmt.executeUpdate();
 	println(i, " rows affected");
+
+	/*
 	rs = pstmt.getGeneratedKeys();
 	rs.next();
 	println("GeneratedKeys: ", rs.getNumber(1));
