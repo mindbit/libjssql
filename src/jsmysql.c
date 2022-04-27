@@ -182,6 +182,32 @@ static int set_statement(duk_context *ctx, const char *query)
 	return 1;
 }
 
+static int validate_column_index(duk_context *ctx, struct prepared_statement **pstmt, uint32_t *i)
+{
+	int argc = duk_get_top(ctx);
+
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	*pstmt = (struct prepared_statement *)duk_get_pointer(ctx, -1);
+
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (argc < 1)
+		return 0;
+
+	*i = duk_get_int(ctx, 0);
+
+	if (*i < 1 || *i > (*pstmt)->r_len)
+		return 0;
+
+	(*i)--;
+	if ((*pstmt)->r_is_null[*i])
+		return 0;
+
+	return 1;
+}
+
 static int validate_paramater_index(duk_context *ctx, struct prepared_statement **pstmt, uint32_t *i)
 {
 	int argc = duk_get_top(ctx);
@@ -299,86 +325,46 @@ static JSFunctionSpec MysqlGeneratedKeys_functions[] = {
 
 /* {{{ MysqlPreparedResultSet */
 
-static JSClass MysqlPreparedResultSet_class = {
-	"MysqlPreparedResultSet", JSCLASS_HAS_PRIVATE,
-	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, NULL,
-};
+#endif
 
-static inline JSBool MysqlPreparedResultSet_get(JSContext *cx, unsigned argc, jsval *vp, struct prepared_statement **pstmt, uint32_t *i, JSBool *result)
+static int MysqlResultSet_getNumber(duk_context *ctx)
 {
-	jsval this = JS_THIS(cx, vp);
-	*pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	*result = JS_FALSE;
-
-	if (pstmt == NULL)
-		goto out_false;
-
-	if (argc < 1)
-		goto out_false;
-
-	if (!JS_ValueToECMAUint32(cx, JS_ARGV(cx, vp)[0], i))
-		goto out_false;
-
-	if (*i < 1 || *i > (*pstmt)->r_len)
-		goto out_false;
-
-	(*i)--;
-	if ((*pstmt)->r_is_null[*i]) {
-		*result = JS_TRUE;
-		goto out_false;
-	}
-
-	return JS_TRUE;
-
-out_false:
-	JS_SET_RVAL(cx, vp, JSVAL_NULL);
-	return JS_FALSE;
-}
-
-static JSBool MysqlPreparedResultSet_getNumber(JSContext *cx, unsigned argc, jsval *vp)
-{
-	JSBool ret;
 	struct prepared_statement *pstmt;
 	uint32_t i;
-
-	if (!MysqlPreparedResultSet_get(cx, argc, vp, &pstmt, &i, &ret))
-		return ret;
-
 	MYSQL_BIND bind;
 	double val;
+
+	if(!validate_column_index(ctx, &pstmt, &i))
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Index is not valid\n");
 
 	memset(&bind, 0, sizeof(MYSQL_BIND));
 	bind.buffer_type = MYSQL_TYPE_DOUBLE;
 	bind.buffer = &val;
 	bind.buffer_length = sizeof(double);
 
-	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, i, 0)) {
-		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
-		return JS_FALSE;
-	}
+	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, i, 0))
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
 
-	JS_SET_RVAL(cx, vp, JS_NumberValue(val));
-	return JS_TRUE;
+	duk_push_int(ctx, val);
+	return 1;
 }
 
-static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlResultSet_getString(duk_context *ctx)
 {
-	JSBool ret;
 	struct prepared_statement *pstmt;
 	uint32_t i;
+	MYSQL_BIND bind;
+	char *cbuf;
 
-	if (!MysqlPreparedResultSet_get(cx, argc, vp, &pstmt, &i, &ret))
-		return ret;
+	if(!validate_column_index(ctx, &pstmt, &i))
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Index is not valid\n");
 
 	if (!pstmt->r_bind_len[i]) {
-		JS_SET_RVAL(cx, vp, JS_GetEmptyStringValue(cx));
-		return JS_TRUE;
+		duk_push_string(ctx, "");
+		return 1;
 	}
 
-	MYSQL_BIND bind;
-
-	char *cbuf = malloc(pstmt->r_bind_len[i]);
+	cbuf = malloc(pstmt->r_bind_len[i]);
 	assert(cbuf);
 
 	memset(&bind, 0, sizeof(MYSQL_BIND));
@@ -386,85 +372,41 @@ static JSBool MysqlPreparedResultSet_getString(JSContext *cx, unsigned argc, jsv
 	bind.buffer = cbuf;
 	bind.buffer_length = pstmt->r_bind_len[i];
 
-	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, i, 0)) {
-		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
-		return JS_FALSE;
-	}
+	if (mysql_stmt_fetch_column(pstmt->stmt, &bind, i, 0))
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
 
-	size_t jslen;
-
-	/* First determine the necessary size for the js buffer.
-	 * This is well documented in jsapi.h, just before the
-	 * prototype for JS_EncodeCharacters().
-	 */
-	if (JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[i], NULL, &jslen) == JS_FALSE)
-		return JS_FALSE;
-	jschar *jsbuf = JS_malloc(cx, (jslen + 1) * sizeof(jschar));
-	assert(jsbuf);
-
-	if (JS_DecodeBytes(cx, cbuf, pstmt->r_bind_len[i], jsbuf, &jslen) == JS_FALSE)
-		return JS_FALSE;
-	free(cbuf);
-
-	/* Add a null terminator, or we get an assertion failure if mozjs
-	 * is compiled with debugging */
-	jsbuf[jslen] = 0;
-
-	JSString *val = JS_NewUCString(cx, jsbuf, jslen);
-	if (!val)
-		return JS_FALSE;
-
-	JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(val));
-	return JS_TRUE;
-}
-
-static JSBool MysqlPreparedResultSet_next(JSContext *cx, unsigned argc, jsval *vp)
-{
-	jsval this = JS_THIS(cx, vp);
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-	if (pstmt == NULL) {
-		JS_Log(JS_LOG_ERR, "The statement property is not set\n");
-		return JS_FALSE;
-	}
-
-	switch (mysql_stmt_fetch(pstmt->stmt)) {
-	case 0:
-	case MYSQL_DATA_TRUNCATED:
-		JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(JS_TRUE));
-		return JS_TRUE;
-	case MYSQL_NO_DATA:
-		JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(JS_FALSE));
-		return JS_TRUE;
-	default:
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
-		JS_ReportError(cx, "%s", mysql_stmt_error(pstmt->stmt));
-	}
-
-	return JS_FALSE;
-}
-
-#endif
-
-static int MysqlResultSet_getNumber(duk_context *ctx)
-{
-	return 0;
-}
-
-static int MysqlResultSet_getString(duk_context *ctx)
-{
-	return 0;
+	duk_push_lstring(ctx, cbuf, pstmt->r_bind_len[i]);
+	return 1;
 }
 
 static int MysqlResultSet_next(duk_context *ctx)
 {
-	return 0;
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	switch (mysql_stmt_fetch(pstmt->stmt)) {
+	case 0:
+	case MYSQL_DATA_TRUNCATED:
+		duk_push_true(ctx);
+		break;
+	case MYSQL_NO_DATA:
+		duk_push_false(ctx);
+		break;
+	default:
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
+	}
+
+	return 1;
 }
 
 static duk_function_list_entry MysqlResultSet_functions[] = {
 	{"getNumber",	MysqlResultSet_getNumber,	1},
 	{"getString",	MysqlResultSet_getString,	1},
 	{"next",	MysqlResultSet_next,		0},
-	{NULL,		NULL, 					0}
+	{NULL,		NULL, 				0}
 };
 
 #if 0
