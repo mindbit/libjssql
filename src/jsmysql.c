@@ -102,6 +102,7 @@ static int set_statement(duk_context *ctx, const char *query)
 {
 	const char *nativeSQL;
 	unsigned int i;
+	const char *error_message;
 
 	/* Call nativeSQL method on the connection object in the PreparedStatement given */
 	duk_get_prop_string(ctx, -1, "connection");
@@ -129,12 +130,14 @@ static int set_statement(duk_context *ctx, const char *query)
 	pstmt->stmt = mysql_stmt_init(mysql);
 	if (pstmt->stmt == NULL) {
 		free(pstmt);
-		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s","Failed to initialize statement\n");
 	}
 
 	if (mysql_stmt_prepare(pstmt->stmt, nativeSQL, strlen(nativeSQL))) {
+		error_message = mysql_stmt_error(pstmt->stmt);
+		mysql_stmt_free_result(pstmt->stmt);
 		free(pstmt);
-		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", mysql_stmt_error(pstmt->stmt));
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", error_message);
 	}
 
 	pstmt->p_len = mysql_stmt_param_count(pstmt->stmt);
