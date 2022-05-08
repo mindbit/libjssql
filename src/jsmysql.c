@@ -31,10 +31,14 @@ struct prepared_statement {
 	unsigned int r_len;
 	unsigned long *r_bind_len;
 	my_bool *r_is_null;
+
+	/* generated keys */
+	bool return_generated_keys;
 };
 
 struct generated_keys {
 	my_ulonglong last_insert_id;
+	my_ulonglong affected_rows;
 	int cursor;
 };
 
@@ -98,7 +102,25 @@ static void execute_statement(duk_context *ctx, struct prepared_statement *pstmt
 	}
 }
 
-static int set_statement(duk_context *ctx, const char *query)
+static bool return_generated_keys(duk_context *ctx)
+{
+	int argc = duk_get_top(ctx);
+
+	if (argc == 1)
+		return false;
+
+	if (duk_is_number(ctx, 1)) {
+		if (duk_get_number(ctx, 1) == 0)
+			return false;
+
+		return true;
+	}
+
+	return true;
+}
+
+
+static int set_statement(duk_context *ctx, const char *query, bool generated_keys)
 {
 	const char *nativeSQL;
 	unsigned int i;
@@ -174,6 +196,8 @@ static int set_statement(duk_context *ctx, const char *query)
 		pstmt->r_bind[i].length = &pstmt->r_bind_len[i];
 		pstmt->r_bind[i].is_null = &pstmt->r_is_null[i];
 	}
+
+	pstmt->return_generated_keys = generated_keys;
 
 	/* Remove the connection object */
 	duk_pop(ctx);
@@ -263,72 +287,76 @@ static void MysqlGeneratedKeys_finalize(JSFreeOp *fop, JSObject *obj)
 	}
 }
 
+#endif
+
 /* {{{ MysqlPreparedGeneratedKeys */
 
-static JSClass MysqlGeneratedKeys_class = {
-	"MysqlGeneratedKeys", JSCLASS_HAS_PRIVATE,
-	JS_PropertyStub, JS_PropertyStub, JS_PropertyStub, JS_StrictPropertyStub,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, MysqlGeneratedKeys_finalize,
-};
-
-static JSBool MysqlGeneratedKeys_getNumber(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlGeneratedKeys_getNumber(duk_context *ctx)
 {
-	jsval this = JS_THIS(cx, vp);
-	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "generatedKeys");
+	struct generated_keys *k = duk_get_pointer(ctx, -1);
 
 	if (k)
-		JS_SET_RVAL(cx, vp, JS_NumberValue((double)k->last_insert_id));
+		duk_push_int(ctx, k->last_insert_id);
 	else
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+		duk_push_null(ctx);
 
-	return JS_TRUE;
+	return 1;
 }
 
-static JSBool MysqlGeneratedKeys_getString(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlGeneratedKeys_getString(duk_context *ctx)
 {
-	jsval this = JS_THIS(cx, vp);
-	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "generatedKeys");
+	struct generated_keys *k = duk_get_pointer(ctx, -1);
 	char *cstr;
 
-	if (k == NULL)
-		JS_SET_RVAL(cx, vp, JSVAL_NULL);
+	if (k == NULL) {
+		duk_push_null(ctx);
+		return 1;
+	}
 
 	if (asprintf(&cstr, "%ju", (uintmax_t)k->last_insert_id) == -1)
-		return JS_FALSE;
-	JSString *jsstr = JS_NewStringCopyZ(cx, cstr);
+		return DUK_RET_ERROR;
+
+	duk_push_string(ctx, cstr);
 	free(cstr);
-	JS_SET_RVAL(cx, vp, STRING_TO_JSVAL(jsstr));
-	return JS_TRUE;
+
+	return 1;
 }
 
-static JSBool MysqlGeneratedKeys_next(JSContext *cx, unsigned argc, jsval *vp)
+static int MysqlGeneratedKeys_next(duk_context *ctx)
 {
-	jsval this = JS_THIS(cx, vp);
-	struct generated_keys *k = (struct generated_keys *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "generatedKeys");
+	struct generated_keys *k = duk_get_pointer(ctx, -1);
 
 	if (k == NULL)
-		JS_SET_RVAL(cx, vp, JSVAL_FALSE);
+		duk_push_false(ctx);
 
-	if (k->cursor < 1) {
+	if (k->cursor >0)
+		k->last_insert_id++;
+
+	if (k->cursor < k->affected_rows) {
 		k->cursor++;
-		JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(JS_TRUE));
+		duk_push_true(ctx);
 	} else
-		JS_SET_RVAL(cx, vp, BOOLEAN_TO_JSVAL(JS_FALSE));
-	return JS_TRUE;
+		duk_push_false(ctx);
+
+	return 1;
 }
 
-static JSFunctionSpec MysqlGeneratedKeys_functions[] = {
-	JS_FS("getNumber", MysqlGeneratedKeys_getNumber, 1, 0),
-	JS_FS("getString", MysqlGeneratedKeys_getString, 1, 0),
-	JS_FS("next", MysqlGeneratedKeys_next, 0, 0),
-	JS_FS_END
+static duk_function_list_entry MysqlGeneratedKeys_functions[] = {
+	{"getNumber",	MysqlGeneratedKeys_getNumber,	1},
+	{"getString",	MysqlGeneratedKeys_getString,	1},
+	{"next",	MysqlGeneratedKeys_next,	0},
+	{NULL,		NULL, 				0}
 };
 
 /* }}} MysqlPreparedGeneratedKeys */
 
 /* {{{ MysqlPreparedResultSet */
-
-#endif
 
 static int MysqlResultSet_getNumber(duk_context *ctx)
 {
@@ -456,53 +484,17 @@ out:
 	return JS_TRUE;
 }
 
-static JSBool MysqlStatement_getGeneratedKeys(JSContext *cx, unsigned argc, jsval *vp)
-{
-	jsval this = JS_THIS(cx, vp);
-	jsval rval = JSVAL_NULL;
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(JSVAL_TO_OBJECT(this));
-
-	if (pstmt == NULL) {
-		JS_Log(JS_LOG_ERR, "The statement property is not set\n");
-		return JS_FALSE;
-	}
-
-	struct generated_keys *priv = malloc(sizeof(struct generated_keys));
-	assert(priv);
-
-	priv->last_insert_id = mysql_stmt_insert_id(pstmt->stmt);
-	priv->cursor = 0;
-
-	JSObject *robj = JS_NewObject(cx, &MysqlGeneratedKeys_class, NULL, NULL);
-	if (robj == NULL) {
-		JS_ReportError(cx, "Failed to create a new object\n");
-		JS_Log(JS_LOG_ERR, "Failed to create a new object\n");
-		goto out;
-	}
-
-	JS_SetPrivate(robj, priv);
-	if (JS_DefineFunctions(cx, robj, MysqlGeneratedKeys_functions) == JS_FALSE) {
-		JS_ReportError(cx, "Failed to define functions for MysqlGeneratedKeys\n");
-		JS_Log(JS_LOG_ERR, "Failed to define functions for MysqlGeneratedKeys\n");
-		goto out;
-	}
-
-	rval = OBJECT_TO_JSVAL(robj);
-
-out:
-	JS_SET_RVAL(cx, vp, rval);
-	return JS_TRUE;
-}
-
 #endif
 
 static int MysqlStatement_execute(duk_context *ctx)
 {
-	/* TODO auto-generated keys */
 	int argc = duk_get_top(ctx);
+	bool generated_keys;
 
 	if (argc < 1 || argc > 2)
 		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Wrong number of arguments\n");
+
+	generated_keys = return_generated_keys(ctx);
 
 	duk_push_this(ctx);
 	duk_get_prop_string(ctx, -1, "pstmt");
@@ -514,7 +506,7 @@ static int MysqlStatement_execute(duk_context *ctx)
 	/* Must push the Statement object on the stack as it is used by
 	set_statement function */
 	duk_push_this(ctx);
-	if (!set_statement(ctx, duk_get_string(ctx, 0))) {
+	if (!set_statement(ctx, duk_get_string(ctx, 0), generated_keys)) {
 		/* TODO error */
 		return DUK_RET_ERROR;
 	}
@@ -533,7 +525,6 @@ static int MysqlStatement_execute(duk_context *ctx)
 
 static int MysqlStatement_executeQuery(duk_context *ctx)
 {
-	/* TODO auto-generated keys */
 	int argc = duk_get_top(ctx);
 
 	if (argc != 1) 
@@ -549,7 +540,7 @@ static int MysqlStatement_executeQuery(duk_context *ctx)
 	/* Must push the Statement object on the stack as it is used by
 	set_statement function */
 	duk_push_this(ctx);
-	if (!set_statement(ctx, duk_get_string(ctx, 0))) {
+	if (!set_statement(ctx, duk_get_string(ctx, 0), false)) {
 		/* TODO error */
 		return DUK_RET_ERROR;
 	}
@@ -576,11 +567,13 @@ static int MysqlStatement_executeQuery(duk_context *ctx)
 
 static int MysqlStatement_executeUpdate(duk_context *ctx)
 {
-	/* TODO auto-generated keys */
 	int argc = duk_get_top(ctx);
+	bool generated_keys;
 
 	if (argc < 1 || argc > 2)
 		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Wrong number of arguments\n");
+
+	generated_keys = return_generated_keys(ctx);
 
 	duk_push_this(ctx);
 	duk_get_prop_string(ctx, -1, "pstmt");
@@ -592,7 +585,7 @@ static int MysqlStatement_executeUpdate(duk_context *ctx)
 	/* Must push the Statement object on the stack as it is used by
 	set_statement function */
 	duk_push_this(ctx);
-	if (!set_statement(ctx, duk_get_string(ctx, 0))) {
+	if (!set_statement(ctx, duk_get_string(ctx, 0), generated_keys)) {
 		/* TODO error */
 		return DUK_RET_ERROR;
 	}
@@ -621,7 +614,34 @@ static int MysqlStatement_getConnection(duk_context *ctx)
 
 static int MysqlStatement_getGeneratedKeys(duk_context *ctx)
 {
-	return 0;
+	duk_push_this(ctx);
+	duk_get_prop_string(ctx, -1, "pstmt");
+	struct prepared_statement *pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt == NULL)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "The statement property is not set\n");
+
+	if (pstmt->return_generated_keys == false)
+		duk_error(ctx, DUK_ERR_TYPE_ERROR, "%s", "Generated keys were not selected to be retrieved\n");
+
+	struct generated_keys *priv = malloc(sizeof(struct generated_keys));
+	assert(priv);
+
+	priv->affected_rows = mysql_stmt_affected_rows(pstmt->stmt);
+	priv->last_insert_id = mysql_stmt_insert_id(pstmt->stmt);
+
+	priv->cursor = 0;
+
+	/* Create MySQL Generated keys object */
+	duk_push_object(ctx);
+
+	duk_get_global_string(ctx, "MysqlGeneratedKeys");
+	duk_set_prototype(ctx, -2);
+
+	duk_push_pointer(ctx, (void *) priv);
+	duk_put_prop_string(ctx, -2, "generatedKeys");
+
+	return 1;
 }
 
 static int MysqlStatement_getResultSet(duk_context *ctx)
@@ -908,9 +928,12 @@ static int MysqlConnection_nativeSQL(duk_context *ctx)
 static int MysqlConnection_prepareStatement(duk_context *ctx)
 {
 	int argc = duk_get_top(ctx);
+	bool generated_keys;
 
 	if (argc < 1 || argc > 2)
 		return DUK_RET_ERROR;
+
+	generated_keys = return_generated_keys(ctx);
 
 	/* Create MySQL Prepared Statement object */
 	duk_push_object(ctx);
@@ -925,11 +948,10 @@ static int MysqlConnection_prepareStatement(duk_context *ctx)
 	/* set_statement uses the duktape stack for the PreparedStatement object
 	and receives also the query as a normal param. It will simply add the prepared_statement
 	struct as a property to the PreparedStatement object.*/
-	if (!set_statement(ctx, duk_get_string(ctx, 0))) {
+	if (!set_statement(ctx, duk_get_string(ctx, 0), generated_keys)) {
 		/* TODO error */
 		return DUK_RET_ERROR;
 	}
-	/* TODO autogenerated keys */
 
 	return 1;
 }
@@ -1053,6 +1075,11 @@ static duk_function_list_entry MysqlDriver_functions[] = {
 duk_bool_t js_mysql_construct_and_register(duk_context *ctx)
 {
 	int rc;
+
+	/* Create MysqlGeneratedKeys "class" */
+	duk_push_object(ctx);
+	duk_put_function_list(ctx, -1, MysqlGeneratedKeys_functions);
+	duk_put_global_string(ctx, "MysqlGeneratedKeys");
 
 	/* Create MysqlResultSet "class" */
 	duk_push_object(ctx);
