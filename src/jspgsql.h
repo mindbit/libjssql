@@ -21,12 +21,6 @@
 #define NO_GENERATED_KEYS			0
 #define RETURN_GENERATED_KEYS			1
 
-#if 0
-
-#include <jsapi.h>
-
-JSBool JS_PgsqlConstructAndRegister(JSContext *cx, JSObject *global);
-
-#endif
+duk_bool_t js_pgsql_construct_and_register(duk_context *ctx);
 
 #endif
