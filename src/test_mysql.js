@@ -7,25 +7,23 @@ function test() {
 	stmt = conn.createStatement();
 	stmt.execute(query);
 
-	query = "INSERT INTO people(name, age) VALUES (?,?)";
+	query = "INSERT INTO people(name, age) VALUES ('x', 20), ('y', 21), ('z', 22)";
 	println("Executing prepared statement: ", query);
-	pstmt = conn.prepareStatement(query, 1);
-	pstmt.setString(1, "John Smith");
-	pstmt.setNumber(2, 30);
-	i = pstmt.executeUpdate();
+	pstmt = conn.createStatement();
+	i = pstmt.executeUpdate(query, 1);
 	println(i, " rows affected");
 
 	rs = pstmt.getGeneratedKeys();
-	rs.next();
-	println("GeneratedKeys: ", rs.getNumber(1));
+	while(rs.next())
+		println("GeneratedKeys: ", rs.getNumber(1));
 
 	i = 1;
 	println("Reading table:");
-	pstmt = conn.prepareStatement("SELECT name, age FROM people");
+	pstmt = conn.prepareStatement("SELECT id, name, age FROM people");
 	rs = pstmt.executeQuery();
 	while (rs.next()) {
 		println("Row #", i++, ":");
-		dump(rs.getString(1), rs.getNumber(2));
+		dump(rs.getNumber(1), rs.getString(2), rs.getNumber(3));
 	}
 
 	println("Deleting table data");
