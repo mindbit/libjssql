@@ -62,6 +62,7 @@ int main(int argc, const char *argv[])
 		return 1;
 
 	int ret_mysql = 0;
+	int ret_postgres = 0;
 
 
 #ifdef HAVE_MYSQL
@@ -73,18 +74,15 @@ int main(int argc, const char *argv[])
 	printf("\n%s: test_mysql\n", (ret_mysql == 0)? "PASS" : "FAIL");
 #endif
 
-#if 0
-
 #ifdef HAVE_POSTGRESQL
 	printf ("\n[Running postgresql tests]\n");
-	JS_PgsqlConstructAndRegister(cx, global);
-	ret_postgres = run_test("test_pgsql.js", cx, global);
+	if(!js_pgsql_construct_and_register(ctx))
+		return 1;
+	ret_postgres = run_test("test_pgsql.js", ctx);
 	printf("----------------------------------------------------\n");
 	printf("\n%s: test_postgres\n\n", (ret_postgres == 0)? "PASS" : "FAIL");
 #endif
-}
 
-#endif
 
 	duk_pop(ctx);
 

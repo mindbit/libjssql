@@ -1,119 +1,119 @@
-// create table people(id serial primary key, name varchar(40), age int);
+// // create table people(id serial primary key, name varchar(40), age int);
 
 function getPgsqlConnection() {
 	return DriverManager.getConnection("postgresql://127.0.0.1/test_js_sql", "test_js_sql", "123456");
 }
 
-function comparison_test() {
-	var t1, t2;
-	var n = 100000;
-	var simple_statements = [
-		"select * from people",
-		"select * from people where age > -1",
-		"select age from people where name = 'Test' AND age < 30"
-	];
+// function comparison_test() {
+// 	var t1, t2;
+// 	var n = 100000;
+// 	var simple_statements = [
+// 		"select * from people",
+// 		"select * from people where age > -1",
+// 		"select age from people where name = 'Test' AND age < 30"
+// 	];
 
-	var prepared_parameters = ["10", "20"];
-	var prepared_statements = [
-		"select * from people where age < ?",
-		"select * from people where age > ? and age < ?",
-		"select age from people where name = 'Test' AND age < ?"
-	];
-	t1 = gettimeofday();
-	var conn = getPgsqlConnection();
-	if (conn == null)
-		return "FAIL";
-	var stmt = conn.createStatement(); //create simple stmt
+// 	var prepared_parameters = ["10", "20"];
+// 	var prepared_statements = [
+// 		"select * from people where age < ?",
+// 		"select * from people where age > ? and age < ?",
+// 		"select age from people where name = 'Test' AND age < ?"
+// 	];
+// 	t1 = gettimeofday();
+// 	var conn = getPgsqlConnection();
+// 	if (conn == null)
+// 		return "FAIL";
+// 	var stmt = conn.createStatement(); //create simple stmt
 
-	var pstmt = [];
-	for (i = 0; i < 3; i++) {	//create prepared stmt
-		pstmt[i] = conn.prepareStatement(prepared_statements[i]);
-	}
+// 	var pstmt = [];
+// 	for (i = 0; i < 3; i++) {	//create prepared stmt
+// 		pstmt[i] = conn.prepareStatement(prepared_statements[i]);
+// 	}
 
-	var crt1 = 0, crt2 = 0;
-	//set parameters' value
-	pstmt[0].setNumber(1, 10);
-	pstmt[1].setNumber(1, 10);
-	pstmt[2].setNumber(1, 10);
-	pstmt[1].setNumber(2, 20);
+// 	var crt1 = 0, crt2 = 0;
+// 	//set parameters' value
+// 	pstmt[0].setNumber(1, 10);
+// 	pstmt[1].setNumber(1, 10);
+// 	pstmt[2].setNumber(1, 10);
+// 	pstmt[1].setNumber(2, 20);
 
-	for (i = 0; i < n; i++) {
-		if ((i % 2) == 0) {
-			stmt.execute(simple_statements[(crt1++) % 2]);
-		} else {
-			pstmt[(crt2++) % 2].execute();
-		}
-	}
+// 	for (i = 0; i < n; i++) {
+// 		if ((i % 2) == 0) {
+// 			stmt.execute(simple_statements[(crt1++) % 2]);
+// 		} else {
+// 			pstmt[(crt2++) % 2].execute();
+// 		}
+// 	}
 
-	t2 = gettimeofday();
+// 	t2 = gettimeofday();
 
-	print("Time: ");
-	println(t2 - t1);
+// 	print("Time: ");
+// 	println(t2 - t1);
 
-	return "PASS";
-}
+// 	return "PASS";
+// }
 
-function integration_test() {
-	var connectionPgsql, connectionMysql;
-	var statementPgsql, statementMysql;
+// function integration_test() {
+// 	var connectionPgsql, connectionMysql;
+// 	var statementPgsql, statementMysql;
 
-	connectionPgsql = getPgsqlConnection();
-	if (connectionPgsql == null) {
-		println("Failed to connect to PostgreSQL database");
-		return "FAIL";
-	}
+// 	connectionPgsql = getPgsqlConnection();
+// 	if (connectionPgsql == null) {
+// 		println("Failed to connect to PostgreSQL database");
+// 		return "FAIL";
+// 	}
 
-	connectionMysql = DriverManager.getConnection("mysql://127.0.0.1/test_js_sql", "test_js_sql", "123456");
-	if (connectionMysql == null) {
-		println("Failed to connect to MySQL database");
-		return "FAIL";
-	}
+// 	connectionMysql = DriverManager.getConnection("mysql://127.0.0.1/test_js_sql", "test_js_sql", "123456");
+// 	if (connectionMysql == null) {
+// 		println("Failed to connect to MySQL database");
+// 		return "FAIL";
+// 	}
 
-	statementMysql = connectionMysql.createStatement();
-	statementPgsql = connectionPgsql.createStatement();
-	if (statementMysql == null || statementPgsql == null) {
-		println("Failed to create statement");
-		return "FAIL";
-	}
+// 	statementMysql = connectionMysql.createStatement();
+// 	statementPgsql = connectionPgsql.createStatement();
+// 	if (statementMysql == null || statementPgsql == null) {
+// 		println("Failed to create statement");
+// 		return "FAIL";
+// 	}
 
-	statementPgsql.executeUpdate("DROP TABLE IF EXISTS test");
-	if (statementPgsql.execute("CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(40) not null, age INT);") == false) {
-		println("Failed to create the table");
-		return "FAIL";
-	}
+// 	statementPgsql.executeUpdate("DROP TABLE IF EXISTS test");
+// 	if (statementPgsql.execute("CREATE TABLE test (id INT PRIMARY KEY, name VARCHAR(40) not null, age INT);") == false) {
+// 		println("Failed to create the table");
+// 		return "FAIL";
+// 	}
 
-	var preparedStatementPgsql = connectionPgsql.prepareStatement("INSERT INTO test (id, name, age) values (?, ?, ?) ");
-	if (preparedStatementPgsql == null) {
-		println("Failed to prepare the statement");
-		return "FAIL";
-	}
+// 	var preparedStatementPgsql = connectionPgsql.prepareStatement("INSERT INTO test (id, name, age) values (?, ?, ?) ");
+// 	if (preparedStatementPgsql == null) {
+// 		println("Failed to prepare the statement");
+// 		return "FAIL";
+// 	}
 
-	//collect info from mysql
-	var resultMysql = statementMysql.executeQuery("SELECT * from people");
-	if (resultMysql == null) {
-		println("Failed to collect restuls from MYSQL");
-		return "FAIL";
-	}
+// 	//collect info from mysql
+// 	var resultMysql = statementMysql.executeQuery("SELECT * from people");
+// 	if (resultMysql == null) {
+// 		println("Failed to collect restuls from MYSQL");
+// 		return "FAIL";
+// 	}
 
-	//populate PostgreSQL database
-	while(resultMysql.next()) {
-		preparedStatementPgsql.setNumber(1, resultMysql.getNumber(1));
-		preparedStatementPgsql.setString(2, resultMysql.getString(2));
-		preparedStatementPgsql.setNumber(3, resultMysql.getNumber(3));
-		preparedStatementPgsql.executeUpdate();
-	}
+// 	//populate PostgreSQL database
+// 	while(resultMysql.next()) {
+// 		preparedStatementPgsql.setNumber(1, resultMysql.getNumber(1));
+// 		preparedStatementPgsql.setString(2, resultMysql.getString(2));
+// 		preparedStatementPgsql.setNumber(3, resultMysql.getNumber(3));
+// 		preparedStatementPgsql.executeUpdate();
+// 	}
 
-	//collect info from postgresql
-	var resultPgsql = statementPgsql.executeQuery("SELECT * from test");
+// 	//collect info from postgresql
+// 	var resultPgsql = statementPgsql.executeQuery("SELECT * from test");
 
-	//check if they are identical
-	if (!compareTwoObjects(resultMysql, resultPgsql)) {
-		println("Different objects");
-		return "FAIL";
-	}
+// 	//check if they are identical
+// 	if (!compareTwoObjects(resultMysql, resultPgsql)) {
+// 		println("Different objects");
+// 		return "FAIL";
+// 	}
 
-	return "PASS"
-}
+// 	return "PASS"
+// }
 
 function connection_test() {
 	var conn;
@@ -215,21 +215,8 @@ function preparedStatement_set_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	/* sanity check */
-	if (stmt.setNumber(1, "two") == true)
-		return "FAIL";
-
-	if (stmt.setString(1, 3) == true)
-		return "FAIL";
-
-	if (stmt.setNumber(10, 2) == true)
-		return "FAIL";
-
-	if (stmt.setNumber(2, 99) == false)
-		return "FAIL";
-
-	if (stmt.setString(1, "Test") == false)
-		return "FAIL";
+	stmt.setString(1, "people");
+	stmt.setNumber(2, 99);
 
 	return "PASS";
 }
@@ -245,11 +232,8 @@ function preparedStatement_execute_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(2, 99) == false)
-		return "FAIL";
-
-	if (stmt.setString(1, "Test") == false)
-		return "FAIL";
+	stmt.setNumber(2, 99);
+	stmt.setString(1, "Test");
 
 	if (stmt.execute() == false)
 		return "FAIL";
@@ -268,11 +252,8 @@ function preparedStatement_executeQuery_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(2, 99) == false)
-		return "FAIL";
-
-	if (stmt.setString(1, "Test") == false)
-		return "FAIL";
+	stmt.setNumber(2, 99);
+	stmt.setString(1, "Test");
 
 	result = stmt.executeQuery();
 	if (result == null)
@@ -292,11 +273,8 @@ function preparedStatement_executeUpdate_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(1, 99) == false)
-		return "FAIL";
-
-	if (stmt.setString(2, "Mihai") == false)
-		return "FAIL";
+	stmt.setNumber(1, 99);
+	stmt.setString(2, "Mihai");
 
 	if (stmt.executeUpdate() == -1)
 		return "FAIL";
@@ -457,11 +435,8 @@ function preparedStatement_getConnection_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(2, 99) == false)
-		return "FAIL";
-
-	if (stmt.setString(1, "Test") == false)
-		return "FAIL";
+	stmt.setNumber(2, 99);
+	stmt.setString(1, "Test");
 
 	if (compareTwoObjects(conn, stmt.getConnection()) == false)
 		return "FAIL";
@@ -480,11 +455,8 @@ function preparedStatement_getGeneratedKeys_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(1, 13) == false)
-		return "FAIL";
-
-	if (stmt.setString(2, "Test21") == false)
-		return "FAIL";
+	stmt.setNumber(1, 13);
+	stmt.setString(2, "Test21");
 
 	i = stmt.executeUpdate();
 	if (i == -1)
@@ -511,11 +483,9 @@ function preparedStatement_getResultSet_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(2, 99) == false)
-		return "FAIL";
+	stmt.setNumber(2, 99);
 
-	if (stmt.setString(1, "Test") == false)
-		return "FAIL";
+	stmt.setString(1, "Test");
 
 	result = stmt.executeQuery();
 	if (result == null)
@@ -538,11 +508,8 @@ function preparedStatement_getUpdateCount_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(1, 12) == false)
-		return "FAIL";
-
-	if (stmt.setString(2, "Mihai") == false)
-		return "FAIL";
+	stmt.setNumber(1, 12);
+	stmt.setString(2, "Mihai");
 
 	result = stmt.executeUpdate();
 	if (result == -1)
@@ -579,7 +546,7 @@ function simpleStatementResult_test() {
 	//sanity checks (expected a number on position 1, a string on position 2 and another number on position 3)
 	while(result.next()) {
 		if (result.getString(1) == null ||
-			result.getNumber(2) != null ||
+			result.getNumber(2) != 0 ||
 			result.getString(3) == null)
 			return "FAIL";
 	}
@@ -588,23 +555,23 @@ function simpleStatementResult_test() {
 
 	//check with column index
 	while (result.next()) {
-		// print("Id: ");
-		// print(result.getNumber(1));
-		// print(" | Name: ")
-		// print(result.getString(2));
-		// print(" | Age: ");
-		// println(result.getNumber(3));
+		print("Id: ");
+		print(result.getNumber(1));
+		print(" | Name: ")
+		print(result.getString(2));
+		print(" | Age: ");
+		println(result.getNumber(3));
 	}
 
 	//check with column label
 	result.first();
 	while (result.next()) {
-		// print("Id: ");
-		// print(result.getNumber("id"));
-		// print(" | Name: ")
-		// print(result.getString("name"));
-		// print(" | Age: ");
-		// println(result.getNumber("age"));
+		print("Id: ");
+		print(result.getNumber("id"));
+		print(" | Name: ")
+		print(result.getString("name"));
+		print(" | Age: ");
+		println(result.getNumber("age"));
 	}
 
 	return "PASS";
@@ -612,7 +579,7 @@ function simpleStatementResult_test() {
 
 function preparedStatementResult_test() {
 	var conn, stmt, age, name;
-	var studentName = "Cristina";
+	var studentName = "Test1";
 
 	conn = getPgsqlConnection();
 	if (conn == null)
@@ -622,8 +589,7 @@ function preparedStatementResult_test() {
 	stmt = conn.prepareStatement("select age from people where name = ?");
 	if (stmt == null)
 		return "FAIL";
-	if (stmt.setString(1, studentName) == false)
-		return "FAIL";
+	stmt.setString(1, studentName);
 
 	result = stmt.executeQuery();
 	if (result == null)
@@ -641,11 +607,13 @@ function preparedStatementResult_test() {
 	if (stmt == null)
 		return "FAIL";
 
-	if (stmt.setNumber(1, age) == false)
-		return "FAIL";
+	stmt.setNumber(1, age);
 
 	result = stmt.executeQuery();
 	if (result == null)
+		return "FAIL";
+
+	if (result.next() == false)
 		return "FAIL";
 
 	name = result.getString(1);
@@ -685,8 +653,9 @@ function test() {
 	println("[Test 18] Testing getConnection for prepared statement ............... " + preparedStatement_getConnection_test());
 	println("[Test 19] Testing ResultSet for a simple statement  .................. " + simpleStatementResult_test());
 	println("[Test 20] Testing ResultSet for a prepared statement  ................ " + preparedStatementResult_test());
-	//TODO add more complex tests (example: create a table, insert an element, get the result and check if it is the one expected)
+// 	//TODO add more complex tests (example: create a table, insert an element, get the result and check if it is the one expected)
 	return 0;
 }
+
 
 test();
