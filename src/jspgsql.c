@@ -515,47 +515,6 @@ static void result_pretty_printer(struct statement *stmt)
 }
 #endif
 
-/**
- * PgsqlResultSet_finalize - cleanup function for ResultSet objects
- * @cx: JavaScript context
- * @obj: object
- */
-static void PgsqlResultSet_finalize(JSFreeOp *fop, JSObject *obj)
-{
-	struct statement *stmt = (struct statement *)JS_GetPrivate(obj);
-
-	if (stmt && stmt->result) {
-		PQclear(stmt->result);
-		stmt->result = NULL;
-	}
-}
-
-/**
- * PgsqlStatement_finalize - cleanup function for Statement objects
- * @cx: JavaScript context
- * @obj: object
- */
-static void PgsqlStatement_finalize(JSFreeOp *fop, JSObject *obj)
-{
-	struct statement *stmt = (struct statement *)JS_GetPrivate(obj);
-
-	if (stmt != NULL)
-		clear_statement(stmt);
-}
-
-/**
- * PgsqlConnection_finalize - cleanup function for Connection objects
- * @cx: JavaScript context
- * @obj: object
- */
-static void PgsqlConnection_finalize(JSFreeOp *fop, JSObject *obj)
-{
-	PGconn *conn = (PGconn *)JS_GetPrivate(obj);
-
-	if (conn != NULL)
-		PQfinish(conn);
-}
-
 #endif
 
 static int PgsqlResultSet_getNumber(duk_context *ctx)
@@ -659,6 +618,23 @@ static int PgsqlResultSet_last(duk_context *ctx)
 
 	duk_push_true(ctx);
 	return 1;
+}
+
+static int PgsqlResultSet_finalize(duk_context *ctx)
+{
+	struct statement *stmt;
+	duk_get_prop_string(ctx, 0, "stmt");
+	if (!duk_is_undefined(ctx, -1)) {
+		stmt = duk_get_pointer(ctx, -1);
+
+		if (stmt && stmt->result) {
+			PQclear(stmt->result);
+			stmt->result = NULL;
+		}
+	}
+
+	printf("in finalize la result set: ");
+	return 0;
 }
 
 static duk_function_list_entry PgsqlResultSet_functions[] = {
@@ -874,6 +850,21 @@ static int PgsqlStatement_getUpdateCount(duk_context *ctx)
 	return 1;
 }
 
+static int PgsqlStatement_finalize(duk_context *ctx)
+{
+	struct statement *stmt;
+	duk_get_prop_string(ctx, 0, "stmt");
+	if (!duk_is_undefined(ctx, -1)) {
+		stmt = duk_get_pointer(ctx, -1);
+
+		if (stmt != NULL)
+			clear_statement(stmt);
+	}
+
+	printf("in finalize la statement: ");
+	return 0;
+}
+
 static duk_function_list_entry PgsqlStatement_functions[] = {
 	{"execute",		PgsqlStatement_execute,			DUK_VARARGS},
 	{"executeQuery",	PgsqlStatement_executeQuery,		DUK_VARARGS},
@@ -968,6 +959,19 @@ static int PgsqlConnection_nativeSQL(duk_context *ctx)
 	duk_dup(ctx, 0);
 
 	return 1;
+}
+
+static int PgsqlConnection_finalize(duk_context *ctx)
+{
+	PGconn *conn;
+	duk_get_prop_string(ctx, 0, "connection");
+	conn = duk_get_pointer(ctx, -1);
+
+	if (conn != NULL)
+		PQfinish(conn);
+
+	printf("in finalize la connection: ");
+	return 0;
 }
 
 static duk_function_list_entry PgsqlConnection_functions[] = {
@@ -1102,11 +1106,15 @@ duk_bool_t js_pgsql_construct_and_register(duk_context *ctx)
 	/* Create PostgreSQL Connection "class" */
 	duk_push_object(ctx);
 	duk_put_function_list(ctx, -1, PgsqlConnection_functions);
+	duk_push_c_function(ctx, PgsqlConnection_finalize, 2);
+	duk_set_finalizer(ctx, -2);
 	duk_put_global_string(ctx, "PgsqlConnection");
 
 	/* Create PostgreSQL ResultSet "class" */
 	duk_push_object(ctx);
 	duk_put_function_list(ctx, -1, PgsqlResultSet_functions);
+	duk_push_c_function(ctx, PgsqlResultSet_finalize, 2);
+	duk_set_finalizer(ctx, -2);
 	duk_put_global_string(ctx, "PgsqlResultSet");
 
 	/* Create PostgreSQL Statement "class" */
@@ -1116,6 +1124,8 @@ duk_bool_t js_pgsql_construct_and_register(duk_context *ctx)
 	duk_set_prototype(ctx, -2);
 
 	duk_put_function_list(ctx, -1, PgsqlStatement_functions);
+	duk_push_c_function(ctx, PgsqlStatement_finalize, 2);
+	duk_set_finalizer(ctx, -2);
 	duk_put_global_string(ctx, "PgsqlStatement");
 
 	/* Create PostgreSQL PreparedStatement "class" */
