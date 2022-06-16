@@ -215,6 +215,17 @@ static struct statement *generate_statement(duk_context *ctx, const char *native
 	return stmt;
 }
 
+/**
+ * @brief Extract the array of auto generated keys from JS function parameter
+ *
+ * This is a helper function that examines the 2nd JS function parameter and
+ * builds an array of either indices or column names that correspond to the
+ * auto generated keys to be retrieved. The function is used to implement the
+ * overloaded versions of the following functions:
+ *   Connection.prepareStatement()
+ *   Statement.execute()
+ *   Statement.executeUpdate()
+ */
 static int get_columns_values(duk_context *ctx, struct agk_columns **columns)
 {
 	duk_size_t i, len;
@@ -306,6 +317,16 @@ static int get_columns_values(duk_context *ctx, struct agk_columns **columns)
 	return 1;
 }
 
+/**
+ * @brief Retrieve one value from a result set
+ *
+ * This is the implementation of the following JS functions:
+ *   ResultSet.getNumber()
+ *   ResultSet.getString()
+ *
+ * The actual native C functions that correspond to the JS functions are just
+ * thin wrappers around this function.
+ */
 static char *get_value_from_index(duk_context *ctx)
 {
 	struct statement *stmt;

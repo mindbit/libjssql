@@ -14,10 +14,50 @@
 #include "jssql.h"
 #include "jscommon.h"
 
-/* In recent versions of MySQL, the my_bool type no longer exists.
-But in MariaDB it still exists. We want our code to be compatible
-with both, so we use autoconf to detect whether the my_bool type is
-defined and alias it to bool otherwise. */
+/*
+ * MySQL backend driver - implementation details
+ * =============================================
+ *
+ * MySQL C API usage
+ * -----------------
+ *
+ * The MySQL C API consists of two different sets of functions for query and
+ * result manipulation. They correspond to simple and prepared statements,
+ * respectively.
+ *
+ * Examples of simple statement functions:
+ *   mysql_query()
+ *   mysql_num_fields()
+ *   mysql_use_result()
+ *   mysql_store_result()
+ *   mysql_fetch_row()
+ *
+ * Example of prepared statement functions:
+ *   mysql_stmt_prepare()
+ *   mysql_stmt_bind_result()
+ *   mysql_stmt_execute()
+ *   mysql_stmt_fetch()
+ *
+ * While these two sets of functions seem to map well to the Statement and
+ * PreparedStatement classes, the former has a limitation with regards to
+ * running multiple queries simultaneously using the same connection to the
+ * MySQL server. To start another query, the results for the previous query
+ * must be either retrieved up to the last one or stored locally, and this
+ * does not work well with large data sets. To overcome the limitation, we
+ * use the prepared statement C API to implement both types of statement
+ * classes. From the Java SQL API perspective, there is no restriction to
+ * create two or more Statement objects from the same Connection object at
+ * the same time, and retrieve results sequentially. We aim to support this
+ * use case as well.
+ *
+ * The `my_bool` type
+ * ------------------
+ *
+ * In recent versions of MySQL, the `my_bool` type no longer exists, but in
+ * MariaDB it still exists. We want our code to be compatible with both, so
+ * we use autoconf to detect whether the `my_bool` type is defined and alias
+ * it to bool otherwise.
+ */
 
 struct prepared_statement {
 	MYSQL_STMT *stmt;
