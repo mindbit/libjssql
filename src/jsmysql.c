@@ -270,25 +270,6 @@ static int validate_paramater_index(duk_context *ctx, struct prepared_statement 
 	return 1;
 }
 
-#if 0
-
-/**
- * MysqlGeneratedKeys_finalize - cleanup function for GeneratedKeys objects
- * @cx: JavaScript context
- * @obj: object
- */
-static void MysqlGeneratedKeys_finalize(JSFreeOp *fop, JSObject *obj)
-{
-	struct generated_keys *priv = (struct generated_keys *)JS_GetPrivate(obj);
-
-	if (priv) {
-		free(priv);
-		priv = NULL;
-	}
-}
-
-#endif
-
 /* {{{ MysqlPreparedGeneratedKeys */
 
 static int MysqlGeneratedKeys_getNumber(duk_context *ctx)
@@ -345,6 +326,20 @@ static int MysqlGeneratedKeys_next(duk_context *ctx)
 		duk_push_false(ctx);
 
 	return 1;
+}
+
+static int MysqlGeneratedKeys_finalize(duk_context *ctx)
+{
+	struct generated_keys *k;
+	duk_get_prop_string(ctx, 0, "generatedKeys");
+
+	k = duk_get_pointer(ctx, -1);
+	if (k) {
+		free(k);
+		k = NULL;
+	}
+
+	return 0;
 }
 
 static duk_function_list_entry MysqlGeneratedKeys_functions[] = {
@@ -445,19 +440,6 @@ static duk_function_list_entry MysqlResultSet_functions[] = {
 /* }}} MysqlPreparedResultSet */
 
 /* {{{ MysqlPreparedStatement */
-
-/**
- * MysqlPreparedStatement_finalize - cleanup function for PreparedStatement objects
- * @cx: JavaScript context
- * @obj: object
- */
-static void MysqlPreparedStatement_finalize(JSFreeOp *fop, JSObject *obj)
-{
-	struct prepared_statement *pstmt = (struct prepared_statement *)JS_GetPrivate(obj);
-
-	if (pstmt)
-		clear_statement(pstmt);
-}
 
 static JSBool prepared_statement_get_result_set(JSContext *cx, struct prepared_statement *pstmt, jsval *rval)
 {
@@ -687,6 +669,19 @@ static int MysqlStatement_getUpdateCount(duk_context *ctx)
 	return 1;
 }
 
+static int MysqlStatement_finalize(duk_context *ctx)
+{
+	struct prepared_statement *pstmt;
+	duk_get_prop_string(ctx, 0, "pstmt");
+
+	pstmt = duk_get_pointer(ctx, -1);
+
+	if (pstmt)
+		clear_statement(pstmt);
+
+	return 0;
+}
+
 static duk_function_list_entry MysqlStatement_functions[] = {
 	{"execute",		MysqlStatement_execute,			DUK_VARARGS},
 	{"executeQuery",	MysqlStatement_executeQuery,		DUK_VARARGS},
@@ -877,24 +872,6 @@ static duk_function_list_entry MysqlPreparedStatement_functions[] = {
 
 /* {{{ MysqlConnection */
 
-#if 0
-/**
- * MysqlConnection_finalize - cleanup function for MysqlConnection objects
- * @cx: JavaScript context
- * @obj: object
- */
-static void MysqlConnection_finalize(JSFreeOp *fop, JSObject *obj)
-{
-	MYSQL *mysql = (MYSQL *)JS_GetPrivate(obj);
-
-	if (mysql) {
-		mysql_close(mysql);
-		mysql = NULL;
-	}
-}
-
-#endif
-
 static int MysqlConnection_createStatement(duk_context *ctx)
 {
 	/* Create MySQL Statement object */
@@ -954,6 +931,20 @@ static int MysqlConnection_prepareStatement(duk_context *ctx)
 	}
 
 	return 1;
+}
+
+static int MysqlConnection_finalize(duk_context *ctx)
+{
+	MYSQL *mysql;
+	duk_get_prop_string(ctx, 0, "connection");
+	mysql = duk_get_pointer(ctx, -1);
+
+	if (mysql) {
+		mysql_close(mysql);
+		mysql = NULL;
+	}
+
+	return 0;
 }
 
 
@@ -1079,6 +1070,8 @@ duk_bool_t js_mysql_construct_and_register(duk_context *ctx)
 	/* Create MysqlGeneratedKeys "class" */
 	duk_push_object(ctx);
 	duk_put_function_list(ctx, -1, MysqlGeneratedKeys_functions);
+	duk_push_c_function(ctx, MysqlGeneratedKeys_finalize, 2);
+	duk_set_finalizer(ctx, -2);
 	duk_put_global_string(ctx, "MysqlGeneratedKeys");
 
 	/* Create MysqlResultSet "class" */
@@ -1088,6 +1081,8 @@ duk_bool_t js_mysql_construct_and_register(duk_context *ctx)
 
 	/* Create MysqlConnection "class" */
 	duk_push_object(ctx);
+	duk_push_c_function(ctx, MysqlConnection_finalize, 2);
+	duk_set_finalizer(ctx, -2);
 	duk_put_function_list(ctx, -1, MysqlConnection_functions);
 	duk_put_global_string(ctx, "MysqlConnection");
 
@@ -1096,7 +1091,8 @@ duk_bool_t js_mysql_construct_and_register(duk_context *ctx)
 
 	duk_get_global_string(ctx, "Statement");
 	duk_set_prototype(ctx, -2);
-
+	duk_push_c_function(ctx, MysqlStatement_finalize, 2);
+	duk_set_finalizer(ctx, -2);
 	duk_put_function_list(ctx, -1, MysqlStatement_functions);
 	duk_put_global_string(ctx, "MysqlStatement");
 
