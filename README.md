@@ -6,15 +6,8 @@ database API that is exposed inside the JavaScript environment mimics
 the JDBC API. Currently, MySQL/MariaDB and PostgreSQL database drivers
 are implemented and supported.
 
-The library is built on top of the
-[SpiderMonkey](https://developer.mozilla.org/en-US/docs/Mozilla/Projects/SpiderMonkey)
-engine. Unfortunately, it relies on the SpiderMonkey C API, which was
-dropped in version 24. There is no plan to port jssql to C++ and
-likewise there is no plan for SpiderMonkey to bring back the C API.
-There is an ongoing effort to port jssql to use the
-[Duktape](http://duktape.org/) engine, which is written in pure C and is
-a better choice for embedding into a different program. SpiderMonkey is
-supported up to and including release 1.1 of jssql.
+The library is written in C and built on top of the
+[Duktape](http://duktape.org/) embeddable JavaScript engine.
 
 # JavaScript API Example
 
@@ -27,7 +20,7 @@ implemented in the [jsmisc](https://github.com/mindbit/libjsmisc)
 library, which is used by jssql as a support library.
 
 ```javascript
-conn = DriverManager.getConnection("mysql://centos6/test_js_sql", "test_js_sql", "123456");
+conn = DriverManager.getConnection("mysql://localhost/example", "example", "123456");
 
 query = "INSERT INTO people(name, age) VALUES (?,?)";
 println("Executing prepared statement: ", query);
